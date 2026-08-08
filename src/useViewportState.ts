@@ -1,6 +1,6 @@
 import type { Types } from '@cornerstonejs/core';
 import { Enums, eventTarget, getEnabledElementByViewportId } from '@cornerstonejs/core';
-import { useSyncExternalStore } from 'react';
+import { useRef, useSyncExternalStore } from 'react';
 
 /** Observable state of one Stack viewport. Immutable Snapshot (deep-frozen). */
 export interface ViewportState {
@@ -154,12 +154,48 @@ const bindings = new Map<string, Binding>();
  * Reads the Viewport State for a viewport resolved via the CS3D global
  * registry (ADR 0002). Absence is a normal state: returns `undefined`
  * when the viewport does not exist (yet).
+ *
+ * With a selector, the component re-renders only when the selected value
+ * changes (Object.is). The selector is never called while the viewport is
+ * absent — the hook returns `undefined` instead.
  */
-export function useViewportState(viewportId: string): ViewportState | undefined {
+export function useViewportState(viewportId: string): ViewportState | undefined;
+export function useViewportState<T>(
+  viewportId: string,
+  selector: (state: ViewportState) => T,
+): T | undefined;
+export function useViewportState<T>(
+  viewportId: string,
+  selector?: (state: ViewportState) => T,
+): T | ViewportState | undefined {
   let binding = bindings.get(viewportId);
   if (!binding) {
     binding = createBinding(viewportId);
     bindings.set(viewportId, binding);
   }
-  return useSyncExternalStore(binding.subscribe, binding.getSnapshot);
+  const { subscribe, getSnapshot } = binding;
+
+  // useSyncExternalStore has no native selector support: it re-renders
+  // whenever getSnapshot's result changes by Object.is. So getSnapshot here
+  // returns the *selected* value, memoized per (Snapshot, selector) and kept
+  // referentially stable while Object.is-equal.
+  // ponytail: equality is Object.is only — a selector deriving a fresh object
+  // per call still re-renders on every Engine event (no loop; the memo keeps
+  // within-render reads consistent). Add an isEqual param if that bites.
+  const memo = useRef<{
+    snapshot: ViewportState | undefined;
+    selector: typeof selector;
+    selected: T | ViewportState | undefined;
+  }>(undefined);
+
+  return useSyncExternalStore(subscribe, () => {
+    const snapshot = getSnapshot();
+    const prev = memo.current;
+    if (prev && prev.snapshot === snapshot && prev.selector === selector) return prev.selected;
+    let selected =
+      snapshot === undefined ? undefined : selector ? selector(snapshot) : snapshot;
+    if (prev && Object.is(prev.selected, selected)) selected = prev.selected;
+    memo.current = { snapshot, selector, selected };
+    return selected;
+  });
 }

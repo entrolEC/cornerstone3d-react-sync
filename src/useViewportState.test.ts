@@ -307,6 +307,83 @@ describe('useViewportState', () => {
     targetRemove.mockRestore();
   });
 
+  describe('selector', () => {
+    test('does not re-render when only unselected state changes', () => {
+      const { engineState, fire } = createFakeStackViewport('vp-sel-skip');
+      let renders = 0;
+      const { result } = renderHook(() => {
+        renders++;
+        return useViewportState('vp-sel-skip', (s) => s.imageIdIndex);
+      });
+      const rendersBefore = renders;
+
+      engineState.camera.parallelScale = 50; // zoom only
+      fire(Enums.Events.CAMERA_MODIFIED);
+
+      expect(renders).toBe(rendersBefore);
+      expect(result.current).toBe(0);
+    });
+
+    test('re-renders exactly once when the selected value changes', () => {
+      const { engineState, fire } = createFakeStackViewport('vp-sel-hit');
+      let renders = 0;
+      const { result } = renderHook(() => {
+        renders++;
+        return useViewportState('vp-sel-hit', (s) => s.imageIdIndex);
+      });
+      const rendersBefore = renders;
+
+      engineState.imageIdIndex = 42;
+      fire(Enums.Events.STACK_NEW_IMAGE);
+
+      expect(result.current).toBe(42);
+      expect(renders).toBe(rendersBefore + 1);
+    });
+
+    test('without a selector returns the whole Viewport State', () => {
+      const { engineState } = createFakeStackViewport('vp-sel-none');
+
+      const { result } = renderHook(() => useViewportState('vp-sel-none'));
+
+      expect(result.current).toEqual({
+        camera: engineState.camera,
+        voiRange: engineState.voiRange,
+        imageIdIndex: engineState.imageIdIndex,
+      });
+    });
+
+    test('when the viewport is absent the selector is not called and undefined is returned', () => {
+      const selector = vi.fn((s: { imageIdIndex: number }) => s.imageIdIndex);
+
+      const { result } = renderHook(() => useViewportState('vp-sel-absent', selector));
+
+      expect(result.current).toBeUndefined();
+      expect(selector).not.toHaveBeenCalled();
+    });
+
+    test('inline selector returning an object stays referentially stable across re-renders', () => {
+      createFakeStackViewport('vp-sel-inline');
+      const { result, rerender } = renderHook(() =>
+        useViewportState('vp-sel-inline', (s) => s.camera),
+      );
+      const first = result.current;
+
+      rerender();
+
+      expect(result.current).toBe(first);
+    });
+
+    test('selector sees undefined again after the viewport is disabled', () => {
+      const { disable } = createFakeStackViewport('vp-sel-gone');
+      const { result } = renderHook(() => useViewportState('vp-sel-gone', (s) => s.imageIdIndex));
+      expect(result.current).toBe(0);
+
+      disable();
+
+      expect(result.current).toBeUndefined();
+    });
+  });
+
   test('a Snapshot handed to a consumer never changes afterwards', () => {
     const { engineState, fire } = createFakeStackViewport('vp-immutable');
     const { result } = renderHook(() => useViewportState('vp-immutable'));
