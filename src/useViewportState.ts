@@ -1,5 +1,5 @@
 import type { Types } from '@cornerstonejs/core';
-import { Enums, getEnabledElementByViewportId } from '@cornerstonejs/core';
+import { Enums, eventTarget, getEnabledElementByViewportId } from '@cornerstonejs/core';
 import { useSyncExternalStore } from 'react';
 
 /** Observable state of one Stack viewport. Immutable Snapshot (deep-frozen). */
@@ -78,23 +78,59 @@ function createBinding(viewportId: string): Binding {
 
   let snapshot = buildSnapshot();
 
+  const notify = () => listeners.forEach((listener) => listener());
+
   const update = () => {
     const next = buildSnapshot();
     if (next === snapshot) return;
     if (next && snapshot && statesEqual(next, snapshot)) return;
     snapshot = next;
-    listeners.forEach((listener) => listener());
+    notify();
+  };
+
+  const attachElement = () => {
+    element = getEnabledElementByViewportId(viewportId)?.viewport.element;
+    for (const type of ELEMENT_EVENTS) element?.addEventListener(type, update);
+  };
+
+  const detachElement = () => {
+    for (const type of ELEMENT_EVENTS) element?.removeEventListener(type, update);
+    element = undefined;
+  };
+
+  const onEnabled = (evt: Event) => {
+    if ((evt as Types.EventTypes.ElementEnabledEvent).detail.viewportId !== viewportId) return;
+    detachElement(); // re-enable may bring a new element for the same id
+    attachElement();
+    update();
+  };
+
+  const onDisabled = (evt: Event) => {
+    if ((evt as Types.EventTypes.ElementDisabledEvent).detail.viewportId !== viewportId) return;
+    detachElement();
+    // ELEMENT_DISABLED fires before registry removal — clear explicitly
+    // instead of rebuilding from a registry that still holds the viewport.
+    if (snapshot !== undefined) {
+      snapshot = undefined;
+      notify();
+    }
   };
 
   const attach = () => {
-    element = getEnabledElementByViewportId(viewportId)?.viewport.element;
-    for (const type of ELEMENT_EVENTS) element?.addEventListener(type, update);
+    eventTarget.addEventListener(Enums.Events.ELEMENT_ENABLED, onEnabled);
+    eventTarget.addEventListener(Enums.Events.ELEMENT_DISABLED, onDisabled);
+    attachElement();
     update(); // state may have moved between render and subscription
   };
 
   const detach = () => {
-    for (const type of ELEMENT_EVENTS) element?.removeEventListener(type, update);
-    element = undefined;
+    eventTarget.removeEventListener(Enums.Events.ELEMENT_ENABLED, onEnabled);
+    eventTarget.removeEventListener(Enums.Events.ELEMENT_DISABLED, onDisabled);
+    detachElement();
+    // A dormant Binding can't hear disable events; a kept Snapshot could be
+    // served stale to the next consumer's first render. Absence until the
+    // subscribe-time update() is the honest state (ADR 0002).
+    snapshot = undefined;
   };
 
   return {

@@ -1,5 +1,5 @@
 import type { Types } from '@cornerstonejs/core';
-import { Enums, getEnabledElementByViewportId } from '@cornerstonejs/core';
+import { Enums, eventTarget, getEnabledElementByViewportId } from '@cornerstonejs/core';
 import { act, renderHook } from '@testing-library/react';
 import { createElement, StrictMode, type ReactNode } from 'react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
@@ -21,8 +21,9 @@ afterEach(() => {
  * getters return a FRESH object on every call, and engine events fire as
  * CustomEvents on the viewport's element.
  */
-function createFakeStackViewport(viewportId: string) {
+function createFakeStackViewport(viewportId: string, { enabled = true } = {}) {
   const element = document.createElement('div');
+  let isEnabled = enabled;
   const engineState = {
     camera: {
       position: [0, 0, 100] as Types.Point3,
@@ -45,13 +46,28 @@ function createFakeStackViewport(viewportId: string) {
   // CS3D declares a non-optional return but yields undefined for unknown ids.
   vi.mocked(getEnabledElementByViewportId).mockImplementation(
     (id) =>
-      (id === viewportId ? { viewport } : undefined) as unknown as Types.IEnabledElement,
+      (id === viewportId && isEnabled
+        ? { viewport }
+        : undefined) as unknown as Types.IEnabledElement,
   );
   const fire = (type: string) =>
     act(() => {
       element.dispatchEvent(new CustomEvent(type));
     });
-  return { element, engineState, fire };
+  const detail = { viewportId, element, renderingEngineId: 'engine' };
+  const enable = () =>
+    act(() => {
+      isEnabled = true;
+      eventTarget.dispatchEvent(new CustomEvent(Enums.Events.ELEMENT_ENABLED, { detail }));
+    });
+  const disable = () =>
+    act(() => {
+      // CS3D fires ELEMENT_DISABLED before removing the viewport from the
+      // registry — mirror that ordering.
+      eventTarget.dispatchEvent(new CustomEvent(Enums.Events.ELEMENT_DISABLED, { detail }));
+      isEnabled = false;
+    });
+  return { element, engineState, fire, enable, disable };
 }
 
 const strictModeWrapper = ({ children }: { children: ReactNode }) =>
@@ -198,6 +214,97 @@ describe('useViewportState', () => {
 
     unmount();
     expect(addSpy.mock.calls.length).toBe(removeSpy.mock.calls.length);
+  });
+
+  test('fills automatically when the viewport is enabled after the hook mounted', () => {
+    const { engineState, enable } = createFakeStackViewport('vp-late', { enabled: false });
+    const { result } = renderHook(() => useViewportState('vp-late'));
+    expect(result.current).toBeUndefined();
+
+    enable();
+
+    expect(result.current).toEqual({
+      camera: engineState.camera,
+      voiRange: engineState.voiRange,
+      imageIdIndex: engineState.imageIdIndex,
+    });
+  });
+
+  test('returns to undefined when the viewport is disabled — no stale value', () => {
+    const { disable } = createFakeStackViewport('vp-gone');
+    const { result } = renderHook(() => useViewportState('vp-gone'));
+    expect(result.current).toBeDefined();
+
+    disable();
+
+    expect(result.current).toBeUndefined();
+  });
+
+  test('keeps tracking Engine events on a viewport re-enabled after disable', () => {
+    const { engineState, fire, enable, disable } = createFakeStackViewport('vp-cycle');
+    const { result } = renderHook(() => useViewportState('vp-cycle'));
+
+    disable();
+    enable();
+    engineState.imageIdIndex = 11;
+    fire(Enums.Events.STACK_NEW_IMAGE);
+
+    expect(result.current?.imageIdIndex).toBe(11);
+  });
+
+  test('ignores lifecycle events for other viewports', () => {
+    createFakeStackViewport('vp-mine');
+    const { result } = renderHook(() => useViewportState('vp-mine'));
+    const before = result.current;
+
+    act(() => {
+      eventTarget.dispatchEvent(
+        new CustomEvent(Enums.Events.ELEMENT_DISABLED, {
+          detail: { viewportId: 'vp-other', element: document.createElement('div') },
+        }),
+      );
+    });
+
+    expect(result.current).toBe(before);
+  });
+
+  test('no stale value on remount after the viewport was disabled while unobserved', () => {
+    const { disable } = createFakeStackViewport('vp-dormant');
+    const first = renderHook(() => useViewportState('vp-dormant'));
+    expect(first.result.current).toBeDefined();
+    first.unmount();
+
+    disable(); // Binding is detached — it cannot hear this
+
+    // The stale Snapshot would only surface in the very first render frame
+    // (before subscribe runs), so capture every render-time value.
+    const seen: unknown[] = [];
+    renderHook(() => {
+      seen.push(useViewportState('vp-dormant'));
+    });
+    expect(seen).toEqual([undefined]);
+  });
+
+  test('repeated enable/disable cycles leak no subscriptions', () => {
+    const { element, enable, disable } = createFakeStackViewport('vp-churn', {
+      enabled: false,
+    });
+    const elementAdd = vi.spyOn(element, 'addEventListener');
+    const elementRemove = vi.spyOn(element, 'removeEventListener');
+    const targetAdd = vi.spyOn(eventTarget, 'addEventListener');
+    const targetRemove = vi.spyOn(eventTarget, 'removeEventListener');
+
+    const { unmount } = renderHook(() => useViewportState('vp-churn'));
+    for (let i = 0; i < 3; i++) {
+      enable();
+      disable();
+    }
+    unmount();
+
+    expect(elementAdd.mock.calls.length).toBe(elementRemove.mock.calls.length);
+    expect(targetAdd.mock.calls.length).toBe(targetRemove.mock.calls.length);
+    targetAdd.mockRestore();
+    targetRemove.mockRestore();
   });
 
   test('a Snapshot handed to a consumer never changes afterwards', () => {
