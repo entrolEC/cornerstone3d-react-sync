@@ -1,0 +1,38 @@
+{
+  "name": "cornerstone3d-react-sync",
+  "version": "0.1.0",
+  "description": "React bindings that expose Cornerstone3D's live engine state to React, tearing-free, via useSyncExternalStore",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "@cornerstonejs/core": "^5.0.0",
+    "react": "^18.0.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@cornerstonejs/core": "^5.7.0",
+    "@testing-library/react": "^16.3.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "jsdom": "^26.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "^5.5.3",
+    "vitest": "^3.0.0"
+  },
+  "private": true
+}

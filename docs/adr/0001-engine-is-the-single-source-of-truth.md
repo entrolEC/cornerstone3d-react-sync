@@ -1,0 +1,3 @@
+# Engine is the single source of truth; React reads only
+
+The library binds React to a live Cornerstone3D Engine that mutates its own state during user interaction (pan/zoom/window-level happen inside the Engine, every frame). We decided the Engine is the only source of truth: reads flow Engine → event → Snapshot → `useSyncExternalStore`, and writes from React are plain Cornerstone3D API calls (Commands) whose effects reach React only by coming back as Engine events. The rejected alternative — mirroring state into a React-side store and pushing it into the Engine (controlled-component model) — would spend most of the library's complexity on echo suppression and per-frame back-sync, so the library ships no write helpers in v1 at all.
