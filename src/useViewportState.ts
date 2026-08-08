@@ -1,14 +1,118 @@
-import { getEnabledElementByViewportId } from '@cornerstonejs/core';
+import type { Types } from '@cornerstonejs/core';
+import { Enums, getEnabledElementByViewportId } from '@cornerstonejs/core';
 import { useSyncExternalStore } from 'react';
 
-// ponytail: placeholder Snapshot; the real Viewport State shape lands in issue 02.
-export type ViewportState = Record<string, never>;
+/** Observable state of one Stack viewport. Immutable Snapshot (deep-frozen). */
+export interface ViewportState {
+  readonly camera: Types.ICamera;
+  readonly voiRange: Types.VOIRange | undefined;
+  readonly imageIdIndex: number;
+}
 
-// Stable reference — getSnapshot must not return a fresh object per call.
-const EMPTY_STATE: ViewportState = Object.freeze({});
+// Engine events that invalidate the Snapshot. All fire on viewport.element.
+const ELEMENT_EVENTS = [
+  Enums.Events.CAMERA_MODIFIED,
+  Enums.Events.VOI_MODIFIED,
+  Enums.Events.STACK_NEW_IMAGE,
+];
 
-// ponytail: Binding (event subscription) lands in issue 02.
-const subscribe = () => () => {};
+function deepFreeze<T>(value: T): T {
+  if (typeof value === 'object' && value !== null) {
+    for (const child of Object.values(value)) deepFreeze(child);
+    Object.freeze(value);
+  }
+  return value;
+}
+
+function camerasEqual(a: Types.ICamera, b: Types.ICamera): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const key of keys) {
+    const av = a[key as keyof Types.ICamera];
+    const bv = b[key as keyof Types.ICamera];
+    if (Array.isArray(av) && Array.isArray(bv)) {
+      if (av.length !== bv.length || av.some((v, i) => v !== bv[i])) return false;
+    } else if (av !== bv) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function statesEqual(a: ViewportState, b: ViewportState): boolean {
+  return (
+    a.imageIdIndex === b.imageIdIndex &&
+    a.voiRange?.lower === b.voiRange?.lower &&
+    a.voiRange?.upper === b.voiRange?.upper &&
+    camerasEqual(a.camera, b.camera)
+  );
+}
+
+interface Binding {
+  subscribe: (onChange: () => void) => () => void;
+  getSnapshot: () => ViewportState | undefined;
+}
+
+/**
+ * One Binding per viewportId: subscribes to Engine events on the viewport's
+ * element while it has consumers, and rebuilds an immutable Snapshot only on
+ * those events, so `getSnapshot` is referentially stable (CS3D getters return
+ * fresh objects per call; the Snapshot absorbs that).
+ */
+function createBinding(viewportId: string): Binding {
+  const listeners = new Set<() => void>();
+  let element: HTMLDivElement | undefined;
+
+  const buildSnapshot = (): ViewportState | undefined => {
+    const enabled = getEnabledElementByViewportId(viewportId);
+    if (!enabled) return undefined;
+    // ponytail: Stack-only cast; per-kind Viewport State types land in issue 06.
+    const viewport = enabled.viewport as Types.IStackViewport;
+    // structuredClone: getter output may share nested arrays with the Engine;
+    // freezing those in place would break Engine-side mutation.
+    return deepFreeze({
+      camera: structuredClone(viewport.getCamera()),
+      voiRange: structuredClone(viewport.getProperties().voiRange),
+      imageIdIndex: viewport.getCurrentImageIdIndex(),
+    });
+  };
+
+  let snapshot = buildSnapshot();
+
+  const update = () => {
+    const next = buildSnapshot();
+    if (next === snapshot) return;
+    if (next && snapshot && statesEqual(next, snapshot)) return;
+    snapshot = next;
+    listeners.forEach((listener) => listener());
+  };
+
+  const attach = () => {
+    element = getEnabledElementByViewportId(viewportId)?.viewport.element;
+    for (const type of ELEMENT_EVENTS) element?.addEventListener(type, update);
+    update(); // state may have moved between render and subscription
+  };
+
+  const detach = () => {
+    for (const type of ELEMENT_EVENTS) element?.removeEventListener(type, update);
+    element = undefined;
+  };
+
+  return {
+    subscribe: (onChange) => {
+      if (listeners.size === 0) attach();
+      listeners.add(onChange);
+      return () => {
+        listeners.delete(onChange);
+        if (listeners.size === 0) detach();
+      };
+    },
+    getSnapshot: () => snapshot,
+  };
+}
+
+// ponytail: Bindings live for the session once created; evict at zero
+// consumers if viewportId churn ever matters.
+const bindings = new Map<string, Binding>();
 
 /**
  * Reads the Viewport State for a viewport resolved via the CS3D global
@@ -16,7 +120,10 @@ const subscribe = () => () => {};
  * when the viewport does not exist (yet).
  */
 export function useViewportState(viewportId: string): ViewportState | undefined {
-  return useSyncExternalStore(subscribe, () =>
-    getEnabledElementByViewportId(viewportId) ? EMPTY_STATE : undefined,
-  );
+  let binding = bindings.get(viewportId);
+  if (!binding) {
+    binding = createBinding(viewportId);
+    bindings.set(viewportId, binding);
+  }
+  return useSyncExternalStore(binding.subscribe, binding.getSnapshot);
 }
