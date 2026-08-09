@@ -1,6 +1,6 @@
 import type { Types } from '@cornerstonejs/core';
 import { Enums, eventTarget, getEnabledElementByViewportId } from '@cornerstonejs/core';
-import { useRef, useSyncExternalStore } from 'react';
+import { useCallback, useRef, useSyncExternalStore } from 'react';
 
 /** Observable state of one Stack viewport. Immutable Snapshot (deep-frozen). */
 export interface ViewportState {
@@ -47,8 +47,13 @@ function statesEqual(a: ViewportState, b: ViewportState): boolean {
   );
 }
 
+export interface UseViewportStateOptions {
+  /** Batch Engine events to at most one update per animation frame. Default true. */
+  batch?: boolean;
+}
+
 interface Binding {
-  subscribe: (onChange: () => void) => () => void;
+  subscribe: (onChange: () => void, batch: boolean) => () => void;
   getSnapshot: () => ViewportState | undefined;
 }
 
@@ -88,14 +93,45 @@ function createBinding(viewportId: string): Binding {
     notify();
   };
 
+  // Engine events during a drag arrive tens of times per second; batch them
+  // to one Snapshot rebuild per frame unless a consumer opted out.
+  let rafId: number | undefined;
+  let unbatchedCount = 0;
+
+  const cancelPending = () => {
+    if (rafId !== undefined) {
+      cancelAnimationFrame(rafId);
+      rafId = undefined;
+    }
+  };
+
+  const onEngineEvent = () => {
+    if (unbatchedCount > 0) {
+      // ponytail: one unbatched consumer makes every consumer of this
+      // viewport update synchronously — the Snapshot is shared. Split
+      // per-mode if it bites.
+      cancelPending();
+      update();
+      return;
+    }
+    if (rafId !== undefined) return;
+    rafId = requestAnimationFrame(() => {
+      rafId = undefined;
+      update();
+    });
+  };
+
   const attachElement = () => {
     element = getEnabledElementByViewportId(viewportId)?.viewport.element;
-    for (const type of ELEMENT_EVENTS) element?.addEventListener(type, update);
+    for (const type of ELEMENT_EVENTS) element?.addEventListener(type, onEngineEvent);
   };
 
   const detachElement = () => {
-    for (const type of ELEMENT_EVENTS) element?.removeEventListener(type, update);
+    for (const type of ELEMENT_EVENTS) element?.removeEventListener(type, onEngineEvent);
     element = undefined;
+    // A pending rAF would rebuild from a registry this Binding no longer
+    // watches (or resurrect a cleared Snapshot after disable) — drop it.
+    cancelPending();
   };
 
   const onEnabled = (evt: Event) => {
@@ -134,11 +170,13 @@ function createBinding(viewportId: string): Binding {
   };
 
   return {
-    subscribe: (onChange) => {
+    subscribe: (onChange, batch) => {
       if (listeners.size === 0) attach();
       listeners.add(onChange);
+      if (!batch) unbatchedCount++;
       return () => {
         listeners.delete(onChange);
+        if (!batch) unbatchedCount--;
         if (listeners.size === 0) detach();
       };
     },
@@ -159,21 +197,31 @@ const bindings = new Map<string, Binding>();
  * changes (Object.is). The selector is never called while the viewport is
  * absent — the hook returns `undefined` instead.
  */
-export function useViewportState(viewportId: string): ViewportState | undefined;
+export function useViewportState(
+  viewportId: string,
+  selector?: undefined,
+  options?: UseViewportStateOptions,
+): ViewportState | undefined;
 export function useViewportState<T>(
   viewportId: string,
   selector: (state: ViewportState) => T,
+  options?: UseViewportStateOptions,
 ): T | undefined;
 export function useViewportState<T>(
   viewportId: string,
   selector?: (state: ViewportState) => T,
+  { batch = true }: UseViewportStateOptions = {},
 ): T | ViewportState | undefined {
   let binding = bindings.get(viewportId);
   if (!binding) {
     binding = createBinding(viewportId);
     bindings.set(viewportId, binding);
   }
-  const { subscribe, getSnapshot } = binding;
+  const { subscribe: bindingSubscribe, getSnapshot } = binding;
+  const subscribe = useCallback(
+    (onChange: () => void) => bindingSubscribe(onChange, batch),
+    [bindingSubscribe, batch],
+  );
 
   // useSyncExternalStore has no native selector support: it re-renders
   // whenever getSnapshot's result changes by Object.is. So getSnapshot here

@@ -2,7 +2,7 @@ import type { Types } from '@cornerstonejs/core';
 import { Enums, eventTarget, getEnabledElementByViewportId } from '@cornerstonejs/core';
 import { act, renderHook } from '@testing-library/react';
 import { createElement, StrictMode, type ReactNode } from 'react';
-import { afterEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { useViewportState } from './index';
 
 // Real module loads (validates the peer dep under jsdom); only the registry
@@ -12,7 +12,13 @@ vi.mock('@cornerstonejs/core', async (importOriginal) => ({
   getEnabledElementByViewportId: vi.fn(),
 }));
 
+// Engine events batch per animation frame — tests control frames explicitly.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame'] });
+});
+
 afterEach(() => {
+  vi.useRealTimers();
   vi.mocked(getEnabledElementByViewportId).mockReset();
 });
 
@@ -50,9 +56,16 @@ function createFakeStackViewport(viewportId: string, { enabled = true } = {}) {
         ? { viewport }
         : undefined) as unknown as Types.IEnabledElement,
   );
+  // Dispatch without ending the frame — for observing mid-frame behavior.
+  const fireRaw = (type: string) =>
+    act(() => {
+      element.dispatchEvent(new CustomEvent(type));
+    });
+  // Dispatch and complete the frame — the common "event happened" case.
   const fire = (type: string) =>
     act(() => {
       element.dispatchEvent(new CustomEvent(type));
+      vi.advanceTimersToNextFrame();
     });
   const detail = { viewportId, element, renderingEngineId: 'engine' };
   const enable = () =>
@@ -67,7 +80,7 @@ function createFakeStackViewport(viewportId: string, { enabled = true } = {}) {
       eventTarget.dispatchEvent(new CustomEvent(Enums.Events.ELEMENT_DISABLED, { detail }));
       isEnabled = false;
     });
-  return { element, engineState, fire, enable, disable };
+  return { element, engineState, fire, fireRaw, enable, disable };
 }
 
 const strictModeWrapper = ({ children }: { children: ReactNode }) =>
@@ -381,6 +394,73 @@ describe('useViewportState', () => {
       disable();
 
       expect(result.current).toBeUndefined();
+    });
+  });
+
+  describe('rAF batching', () => {
+    test('multiple Engine events within one frame collapse into one re-render', () => {
+      const { engineState, fireRaw } = createFakeStackViewport('vp-batch');
+      let renders = 0;
+      const { result } = renderHook(() => {
+        renders++;
+        return useViewportState('vp-batch');
+      });
+      const rendersBefore = renders;
+
+      engineState.camera.parallelScale = 50;
+      fireRaw(Enums.Events.CAMERA_MODIFIED);
+      engineState.camera.parallelScale = 25;
+      fireRaw(Enums.Events.CAMERA_MODIFIED);
+      engineState.camera.parallelScale = 10;
+      fireRaw(Enums.Events.CAMERA_MODIFIED);
+      expect(renders).toBe(rendersBefore); // nothing until the frame ends
+
+      act(() => vi.advanceTimersToNextFrame());
+
+      expect(renders).toBe(rendersBefore + 1);
+      expect(result.current?.camera.parallelScale).toBe(10); // last event wins
+    });
+
+    test('batch: false updates on every Engine event, no frame needed', () => {
+      const { engineState, fireRaw } = createFakeStackViewport('vp-nobatch');
+      let renders = 0;
+      const { result } = renderHook(() => {
+        renders++;
+        return useViewportState('vp-nobatch', undefined, { batch: false });
+      });
+      const rendersBefore = renders;
+
+      engineState.camera.parallelScale = 50;
+      fireRaw(Enums.Events.CAMERA_MODIFIED);
+      expect(result.current?.camera.parallelScale).toBe(50);
+      engineState.camera.parallelScale = 25;
+      fireRaw(Enums.Events.CAMERA_MODIFIED);
+      expect(result.current?.camera.parallelScale).toBe(25);
+
+      expect(renders).toBe(rendersBefore + 2);
+    });
+
+    test('unmount cancels the scheduled rAF callback', () => {
+      const { fireRaw } = createFakeStackViewport('vp-raf-cleanup');
+      const cancelSpy = vi.spyOn(window, 'cancelAnimationFrame');
+      const { unmount } = renderHook(() => useViewportState('vp-raf-cleanup'));
+
+      fireRaw(Enums.Events.CAMERA_MODIFIED); // schedules a rAF
+      unmount();
+
+      expect(cancelSpy).toHaveBeenCalled();
+      cancelSpy.mockRestore();
+    });
+
+    test('viewport disable cancels the scheduled rAF callback', () => {
+      const { fireRaw, disable } = createFakeStackViewport('vp-raf-disable');
+      const { result } = renderHook(() => useViewportState('vp-raf-disable'));
+
+      fireRaw(Enums.Events.CAMERA_MODIFIED);
+      disable();
+      act(() => vi.advanceTimersToNextFrame());
+
+      expect(result.current).toBeUndefined(); // pending rAF must not resurrect state
     });
   });
 

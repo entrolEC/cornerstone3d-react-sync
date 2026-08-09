@@ -1,1 +1,5 @@
-export { useViewportState, type ViewportState } from './useViewportState';
+export {
+  useViewportState,
+  type UseViewportStateOptions,
+  type ViewportState,
+} from './useViewportState';
