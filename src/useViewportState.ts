@@ -2,12 +2,25 @@ import type { Types } from '@cornerstonejs/core';
 import { Enums, eventTarget, getEnabledElementByViewportId } from '@cornerstonejs/core';
 import { useCallback, useRef, useSyncExternalStore } from 'react';
 
-/** Observable state of one Stack viewport. Immutable Snapshot (deep-frozen). */
-export interface ViewportState {
+/** State shared by every viewport kind. */
+interface ViewportStateCommon {
   readonly camera: Types.ICamera;
   readonly voiRange: Types.VOIRange | undefined;
+}
+
+/** Observable state of one Stack viewport. Immutable Snapshot (deep-frozen). */
+export interface StackViewportState extends ViewportStateCommon {
+  readonly kind: 'stack';
   readonly imageIdIndex: number;
 }
+
+/** Observable state of one Volume viewport. Immutable Snapshot (deep-frozen). */
+export interface VolumeViewportState extends ViewportStateCommon {
+  readonly kind: 'volume';
+}
+
+/** Discriminated by `kind`: narrow before touching kind-specific fields. */
+export type ViewportState = StackViewportState | VolumeViewportState;
 
 // Engine events that invalidate the Snapshot. All fire on viewport.element.
 const ELEMENT_EVENTS = [
@@ -39,8 +52,9 @@ function camerasEqual(a: Types.ICamera, b: Types.ICamera): boolean {
 }
 
 function statesEqual(a: ViewportState, b: ViewportState): boolean {
+  if (a.kind !== b.kind) return false;
+  if (a.kind === 'stack' && b.kind === 'stack' && a.imageIdIndex !== b.imageIdIndex) return false;
   return (
-    a.imageIdIndex === b.imageIdIndex &&
     a.voiRange?.lower === b.voiRange?.lower &&
     a.voiRange?.upper === b.voiRange?.upper &&
     camerasEqual(a.camera, b.camera)
@@ -70,14 +84,26 @@ function createBinding(viewportId: string): Binding {
   const buildSnapshot = (): ViewportState | undefined => {
     const enabled = getEnabledElementByViewportId(viewportId);
     if (!enabled) return undefined;
-    // ponytail: Stack-only cast; per-kind Viewport State types land in issue 06.
-    const viewport = enabled.viewport as Types.IStackViewport;
+    const { viewport } = enabled;
     // structuredClone: getter output may share nested arrays with the Engine;
     // freezing those in place would break Engine-side mutation.
-    return deepFreeze({
-      camera: structuredClone(viewport.getCamera()),
-      voiRange: structuredClone(viewport.getProperties().voiRange),
-      imageIdIndex: viewport.getCurrentImageIdIndex(),
+    const camera = structuredClone(viewport.getCamera());
+    if (viewport.type === Enums.ViewportType.STACK) {
+      const stack = viewport as Types.IStackViewport;
+      return deepFreeze<ViewportState>({
+        kind: 'stack',
+        camera,
+        voiRange: structuredClone(stack.getProperties().voiRange),
+        imageIdIndex: stack.getCurrentImageIdIndex(),
+      });
+    }
+    // ponytail: every non-Stack kind reads as 'volume' (camera + VOI is the
+    // shared surface); split further kinds if video/WSI state is ever needed.
+    const volume = viewport as Types.IVolumeViewport;
+    return deepFreeze<ViewportState>({
+      kind: 'volume',
+      camera,
+      voiRange: structuredClone(volume.getProperties()?.voiRange),
     });
   };
 

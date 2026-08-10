@@ -3,59 +3,41 @@ import { Enums, eventTarget, getEnabledElementByViewportId } from '@cornerstonej
 import { act, renderHook } from '@testing-library/react';
 import { createElement, StrictMode, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { useViewportState } from './index';
+import { useViewportState, type ViewportState, type VolumeViewportState } from './index';
 
 // Real module loads (validates the peer dep under jsdom); only the registry
-// lookup is replaced. Unconfigured vi.fn() returns undefined = empty registry.
+// lookup is replaced by a Map so several fake viewports can coexist.
 vi.mock('@cornerstonejs/core', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@cornerstonejs/core')>()),
   getEnabledElementByViewportId: vi.fn(),
 }));
 
+const registry = new Map<string, { viewport: unknown }>();
+
 // Engine events batch per animation frame — tests control frames explicitly.
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame'] });
+  // CS3D declares a non-optional return but yields undefined for unknown ids.
+  vi.mocked(getEnabledElementByViewportId).mockImplementation(
+    (id) => registry.get(id) as unknown as Types.IEnabledElement,
+  );
 });
 
 afterEach(() => {
   vi.useRealTimers();
+  registry.clear();
   vi.mocked(getEnabledElementByViewportId).mockReset();
 });
 
-/**
- * Fake Stack viewport mirroring the CS3D contract the library relies on:
- * getters return a FRESH object on every call, and engine events fire as
- * CustomEvents on the viewport's element.
- */
-function createFakeStackViewport(viewportId: string, { enabled = true } = {}) {
-  const element = document.createElement('div');
-  let isEnabled = enabled;
-  const engineState = {
-    camera: {
-      position: [0, 0, 100] as Types.Point3,
-      focalPoint: [0, 0, 0] as Types.Point3,
-      parallelScale: 100,
-    },
-    voiRange: { lower: 0, upper: 400 },
-    imageIdIndex: 0,
-  };
-  const viewport = {
-    element,
-    getCamera: (): Types.ICamera => ({
-      ...engineState.camera,
-      position: [...engineState.camera.position] as Types.Point3,
-      focalPoint: [...engineState.camera.focalPoint] as Types.Point3,
-    }),
-    getProperties: () => ({ voiRange: { ...engineState.voiRange } }),
-    getCurrentImageIdIndex: () => engineState.imageIdIndex,
-  };
-  // CS3D declares a non-optional return but yields undefined for unknown ids.
-  vi.mocked(getEnabledElementByViewportId).mockImplementation(
-    (id) =>
-      (id === viewportId && isEnabled
-        ? { viewport }
-        : undefined) as unknown as Types.IEnabledElement,
-  );
+// Shared wiring for fake viewports: registry membership, engine events as
+// CustomEvents on the element, and enable/disable lifecycle on eventTarget.
+function wireFakeViewport(
+  viewportId: string,
+  viewport: { element: HTMLDivElement },
+  enabled: boolean,
+) {
+  const { element } = viewport;
+  if (enabled) registry.set(viewportId, { viewport });
   // Dispatch without ending the frame — for observing mid-frame behavior.
   const fireRaw = (type: string) =>
     act(() => {
@@ -70,7 +52,7 @@ function createFakeStackViewport(viewportId: string, { enabled = true } = {}) {
   const detail = { viewportId, element, renderingEngineId: 'engine' };
   const enable = () =>
     act(() => {
-      isEnabled = true;
+      registry.set(viewportId, { viewport });
       eventTarget.dispatchEvent(new CustomEvent(Enums.Events.ELEMENT_ENABLED, { detail }));
     });
   const disable = () =>
@@ -78,13 +60,66 @@ function createFakeStackViewport(viewportId: string, { enabled = true } = {}) {
       // CS3D fires ELEMENT_DISABLED before removing the viewport from the
       // registry — mirror that ordering.
       eventTarget.dispatchEvent(new CustomEvent(Enums.Events.ELEMENT_DISABLED, { detail }));
-      isEnabled = false;
+      registry.delete(viewportId);
     });
-  return { element, engineState, fire, fireRaw, enable, disable };
+  return { element, fire, fireRaw, enable, disable };
+}
+
+function fakeCameraState() {
+  return {
+    camera: {
+      position: [0, 0, 100] as Types.Point3,
+      focalPoint: [0, 0, 0] as Types.Point3,
+      parallelScale: 100,
+    },
+  };
+}
+
+function cameraGetter(engineState: ReturnType<typeof fakeCameraState>) {
+  // Mirrors the CS3D contract: getters return a FRESH object on every call.
+  return (): Types.ICamera => ({
+    ...engineState.camera,
+    position: [...engineState.camera.position] as Types.Point3,
+    focalPoint: [...engineState.camera.focalPoint] as Types.Point3,
+  });
+}
+
+function createFakeStackViewport(viewportId: string, { enabled = true } = {}) {
+  const engineState = {
+    ...fakeCameraState(),
+    voiRange: { lower: 0, upper: 400 },
+    imageIdIndex: 0,
+  };
+  const viewport = {
+    element: document.createElement('div'),
+    type: Enums.ViewportType.STACK,
+    getCamera: cameraGetter(engineState),
+    getProperties: () => ({ voiRange: { ...engineState.voiRange } }),
+    getCurrentImageIdIndex: () => engineState.imageIdIndex,
+  };
+  return { engineState, ...wireFakeViewport(viewportId, viewport, enabled) };
+}
+
+function createFakeVolumeViewport(viewportId: string, { enabled = true } = {}) {
+  const engineState = {
+    ...fakeCameraState(),
+    voiRange: { lower: -1000, upper: 1000 },
+  };
+  const viewport = {
+    element: document.createElement('div'),
+    type: Enums.ViewportType.ORTHOGRAPHIC,
+    getCamera: cameraGetter(engineState),
+    getProperties: () => ({ voiRange: { ...engineState.voiRange } }),
+  };
+  return { engineState, ...wireFakeViewport(viewportId, viewport, enabled) };
 }
 
 const strictModeWrapper = ({ children }: { children: ReactNode }) =>
   createElement(StrictMode, null, children);
+
+// Tests know their fake is a Stack viewport; narrow for Stack-only fields.
+const asStack = (s: ViewportState | undefined) => (s?.kind === 'stack' ? s : undefined);
+const selectStackIndex = (s: ViewportState) => asStack(s)?.imageIdIndex;
 
 describe('useViewportState', () => {
   test('returns undefined when the viewport does not exist', () => {
@@ -99,6 +134,7 @@ describe('useViewportState', () => {
     const { result } = renderHook(() => useViewportState('vp-exists'));
 
     expect(result.current).toEqual({
+      kind: 'stack',
       camera: engineState.camera,
       voiRange: engineState.voiRange,
       imageIdIndex: engineState.imageIdIndex,
@@ -132,7 +168,7 @@ describe('useViewportState', () => {
     engineState.imageIdIndex = 42;
     fire(Enums.Events.STACK_NEW_IMAGE);
 
-    expect(result.current?.imageIdIndex).toBe(42);
+    expect(asStack(result.current)?.imageIdIndex).toBe(42);
   });
 
   test('returns the identical reference across re-renders when state did not change', () => {
@@ -178,7 +214,7 @@ describe('useViewportState', () => {
     engineState.imageIdIndex = 5;
     fire(Enums.Events.STACK_NEW_IMAGE);
 
-    expect(second.result.current?.imageIdIndex).toBe(5);
+    expect(asStack(second.result.current)?.imageIdIndex).toBe(5);
   });
 
   test('returns fresh state on remount after the Engine changed while unobserved', () => {
@@ -189,7 +225,7 @@ describe('useViewportState', () => {
     engineState.imageIdIndex = 9;
     const second = renderHook(() => useViewportState('vp-remount'));
 
-    expect(second.result.current?.imageIdIndex).toBe(9);
+    expect(asStack(second.result.current)?.imageIdIndex).toBe(9);
   });
 
   test('unsubscribes from the Engine when the last consumer unmounts', () => {
@@ -223,7 +259,7 @@ describe('useViewportState', () => {
 
     engineState.imageIdIndex = 7;
     fire(Enums.Events.STACK_NEW_IMAGE);
-    expect(result.current?.imageIdIndex).toBe(7);
+    expect(asStack(result.current)?.imageIdIndex).toBe(7);
 
     unmount();
     expect(addSpy.mock.calls.length).toBe(removeSpy.mock.calls.length);
@@ -237,6 +273,7 @@ describe('useViewportState', () => {
     enable();
 
     expect(result.current).toEqual({
+      kind: 'stack',
       camera: engineState.camera,
       voiRange: engineState.voiRange,
       imageIdIndex: engineState.imageIdIndex,
@@ -262,7 +299,7 @@ describe('useViewportState', () => {
     engineState.imageIdIndex = 11;
     fire(Enums.Events.STACK_NEW_IMAGE);
 
-    expect(result.current?.imageIdIndex).toBe(11);
+    expect(asStack(result.current)?.imageIdIndex).toBe(11);
   });
 
   test('ignores lifecycle events for other viewports', () => {
@@ -326,7 +363,7 @@ describe('useViewportState', () => {
       let renders = 0;
       const { result } = renderHook(() => {
         renders++;
-        return useViewportState('vp-sel-skip', (s) => s.imageIdIndex);
+        return useViewportState('vp-sel-skip', selectStackIndex);
       });
       const rendersBefore = renders;
 
@@ -342,7 +379,7 @@ describe('useViewportState', () => {
       let renders = 0;
       const { result } = renderHook(() => {
         renders++;
-        return useViewportState('vp-sel-hit', (s) => s.imageIdIndex);
+        return useViewportState('vp-sel-hit', selectStackIndex);
       });
       const rendersBefore = renders;
 
@@ -359,6 +396,7 @@ describe('useViewportState', () => {
       const { result } = renderHook(() => useViewportState('vp-sel-none'));
 
       expect(result.current).toEqual({
+        kind: 'stack',
         camera: engineState.camera,
         voiRange: engineState.voiRange,
         imageIdIndex: engineState.imageIdIndex,
@@ -366,7 +404,7 @@ describe('useViewportState', () => {
     });
 
     test('when the viewport is absent the selector is not called and undefined is returned', () => {
-      const selector = vi.fn((s: { imageIdIndex: number }) => s.imageIdIndex);
+      const selector = vi.fn((s: ViewportState) => s.kind);
 
       const { result } = renderHook(() => useViewportState('vp-sel-absent', selector));
 
@@ -388,7 +426,7 @@ describe('useViewportState', () => {
 
     test('selector sees undefined again after the viewport is disabled', () => {
       const { disable } = createFakeStackViewport('vp-sel-gone');
-      const { result } = renderHook(() => useViewportState('vp-sel-gone', (s) => s.imageIdIndex));
+      const { result } = renderHook(() => useViewportState('vp-sel-gone', selectStackIndex));
       expect(result.current).toBe(0);
 
       disable();
@@ -464,6 +502,74 @@ describe('useViewportState', () => {
     });
   });
 
+  describe('Volume viewports', () => {
+    test('returns the current Volume Viewport State with kind "volume" and no Stack fields', () => {
+      const { engineState } = createFakeVolumeViewport('vp-vol');
+
+      const { result } = renderHook(() => useViewportState('vp-vol'));
+
+      expect(result.current).toEqual({
+        kind: 'volume',
+        camera: engineState.camera,
+        voiRange: engineState.voiRange,
+      });
+      expect(result.current && 'imageIdIndex' in result.current).toBe(false);
+    });
+
+    test('camera Engine events sync Volume state', () => {
+      const { engineState, fire } = createFakeVolumeViewport('vp-vol-cam');
+      const { result } = renderHook(() => useViewportState('vp-vol-cam'));
+
+      engineState.camera.parallelScale = 50;
+      fire(Enums.Events.CAMERA_MODIFIED);
+
+      expect(result.current?.camera.parallelScale).toBe(50);
+    });
+
+    test('VOI Engine events sync Volume state', () => {
+      const { engineState, fire } = createFakeVolumeViewport('vp-vol-voi');
+      const { result } = renderHook(() => useViewportState('vp-vol-voi'));
+
+      engineState.voiRange = { lower: -500, upper: 500 };
+      fire(Enums.Events.VOI_MODIFIED);
+
+      expect(result.current?.voiRange).toEqual({ lower: -500, upper: 500 });
+    });
+
+    test('a Stack and a Volume viewport observed together stay independent', () => {
+      const stack = createFakeStackViewport('vp-mix-stack');
+      const volume = createFakeVolumeViewport('vp-mix-vol');
+      const { result } = renderHook(() => ({
+        stack: useViewportState('vp-mix-stack'),
+        volume: useViewportState('vp-mix-vol'),
+      }));
+
+      stack.engineState.imageIdIndex = 7;
+      stack.fire(Enums.Events.STACK_NEW_IMAGE);
+      volume.engineState.camera.parallelScale = 33;
+      volume.fire(Enums.Events.CAMERA_MODIFIED);
+
+      expect(result.current.stack?.kind).toBe('stack');
+      expect(asStack(result.current.stack)?.imageIdIndex).toBe(7);
+      expect(result.current.stack?.camera.parallelScale).toBe(100); // untouched
+      expect(result.current.volume?.kind).toBe('volume');
+      expect(result.current.volume?.camera.parallelScale).toBe(33);
+    });
+
+    test('type-level: Stack-only fields are not accessible on Volume state', () => {
+      const volumeOnly = (state: VolumeViewportState) => {
+        // @ts-expect-error — imageIdIndex is Stack-only
+        return state.imageIdIndex;
+      };
+      const union = (state: ViewportState) => {
+        // @ts-expect-error — union requires narrowing by kind first
+        return state.imageIdIndex;
+      };
+      expect(volumeOnly).toBeDefined();
+      expect(union).toBeDefined();
+    });
+  });
+
   test('a Snapshot handed to a consumer never changes afterwards', () => {
     const { engineState, fire } = createFakeStackViewport('vp-immutable');
     const { result } = renderHook(() => useViewportState('vp-immutable'));
@@ -474,7 +580,7 @@ describe('useViewportState', () => {
     fire(Enums.Events.CAMERA_MODIFIED);
 
     expect(before?.camera.parallelScale).toBe(100);
-    expect(before?.imageIdIndex).toBe(0);
+    expect(asStack(before)?.imageIdIndex).toBe(0);
     expect(Object.isFrozen(result.current)).toBe(true);
     expect(Object.isFrozen(result.current?.camera)).toBe(true);
   });
