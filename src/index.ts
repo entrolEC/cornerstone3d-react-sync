@@ -1,3 +1,4 @@
+export { CornerstoneViewport, type CornerstoneViewportProps } from './CornerstoneViewport';
 export {
   useViewportState,
   type StackViewportState,
