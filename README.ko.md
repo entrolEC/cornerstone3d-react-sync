@@ -12,8 +12,8 @@ npm install react-cornerstone3d
 import { useViewportState } from 'react-cornerstone3d';
 
 function SliceIndicator() {
-  const index = useViewportState('ct-axial', (s) => (s.kind === 'stack' ? s.imageIdIndex : undefined));
-  if (index === undefined) return null; // 뷰포트가 아직 enable 전 — 정상 상태이며, 뭘 보여줄지는 앱의 몫
+  const index = useViewportState('ct-axial', (s) => s.sliceIndex); // Stack·Volume 공통
+  if (index === undefined) return null; // 뷰포트가 아직 enable 전이거나 슬라이스가 없음 — 정상 상태이며, 뭘 보여줄지는 앱의 몫
   return <span>slice {index + 1}</span>;
 }
 ```
@@ -94,15 +94,16 @@ function useViewportState<T>(viewportId: string, selector: (state: ViewportState
 - **`selector`** — 선택한 값이 `Object.is` 기준으로 바뀔 때만 컴포넌트가 리렌더됩니다. 뷰포트 부재 중에는 호출되지 않습니다.
 - **`options.batch`** (기본 `true`) — Engine 이벤트를 애니메이션 프레임당 최대 한 번의 업데이트로 합칩니다. 드래그 중 이벤트마다가 아니라 프레임마다 한 번 렌더됩니다. 이벤트 단위 정확도가 필요하면 `false`.
 
-`ViewportState`는 판별 유니온입니다 — kind별 필드를 읽기 전에 `kind`로 좁히세요:
+`ViewportState`는 판별 유니온입니다. `sliceIndex` / `numberOfSlices`(Slice Position)는 모든 kind 공통이라 하나의 슬라이더가 Stack과 MPR 화면을 모두 담당합니다. 나머지 kind별 필드는 `kind`로 좁혀 읽으세요:
 
 ```ts
-interface StackViewportState  { kind: 'stack';  camera: Types.ICamera; voiRange: Types.VOIRange | undefined; imageIdIndex: number }
-interface VolumeViewportState { kind: 'volume'; camera: Types.ICamera; voiRange: Types.VOIRange | undefined }
+interface ViewportStateCommon { camera: Types.ICamera; voiRange: Types.VOIRange | undefined; sliceIndex: number | undefined; numberOfSlices: number | undefined }
+interface StackViewportState  extends ViewportStateCommon { kind: 'stack';  sliceIndex: number; numberOfSlices: number }
+interface VolumeViewportState extends ViewportStateCommon { kind: 'volume' }
 type ViewportState = StackViewportState | VolumeViewportState;
 ```
 
-모든 상태 객체는 deep-frozen Snapshot이며, 상태가 실제로 바뀌기 전까지 참조가 유지됩니다. `imageIdIndex`는 *요청된* 슬라이스입니다 — 이미지 로드가 끝날 때가 아니라 스크롤이 일어난 순간 갱신됩니다 ([ADR 0003](./docs/adr/0003-image-id-index-is-the-requested-slice.md)).
+모든 상태 객체는 deep-frozen Snapshot이며, 상태가 실제로 바뀌기 전까지 참조가 유지됩니다. Stack에서 `sliceIndex`는 *요청된* 슬라이스입니다 — 이미지 로드가 끝날 때가 아니라 스크롤이 일어난 순간 갱신됩니다 ([ADR 0003](./docs/adr/0003-image-id-index-is-the-requested-slice.md)). Volume에서는 카메라에서 파생되므로 화면보다 앞서가지 않습니다. 슬라이스가 없는 뷰포트(3D, `setVolumes` 전의 Volume)는 두 필드 모두 `undefined`입니다.
 
 ### `<CornerstoneViewport />`
 
@@ -127,12 +128,13 @@ import { CornerstoneViewport } from 'react-cornerstone3d';
 
 ## 현재 상태
 
-v0.1 — 동기화만. 이 라이브러리의 유일한 책임은 상태 동기화입니다.
+v0.2 — 동기화만. 이 라이브러리의 유일한 책임은 상태 동기화입니다.
 
 | 기능 | 상태 |
 |---|---|
 | Stack 뷰포트 상태 (카메라, VOI, 슬라이스 인덱스) | ✅ |
 | Volume 뷰포트 상태 + kind별 타입 | ✅ |
+| Slice Position(`sliceIndex`, `numberOfSlices`) 두 kind 공통 | ✅ |
 | 뷰포트 부재 계약 (`undefined`) | ✅ |
 | viewportId당 공유 Binding, StrictMode 안전 | ✅ |
 | 뷰포트 enable/destroy 시 자동 채움/비움 | ✅ |

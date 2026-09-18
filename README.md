@@ -12,8 +12,8 @@ npm install react-cornerstone3d
 import { useViewportState } from 'react-cornerstone3d';
 
 function SliceIndicator() {
-  const index = useViewportState('ct-axial', (s) => (s.kind === 'stack' ? s.imageIdIndex : undefined));
-  if (index === undefined) return null; // viewport not enabled yet — a normal state, your call what to show
+  const index = useViewportState('ct-axial', (s) => s.sliceIndex); // Stack or Volume alike
+  if (index === undefined) return null; // viewport not enabled yet, or no slices yet — a normal state, your call what to show
   return <span>slice {index + 1}</span>;
 }
 ```
@@ -94,15 +94,16 @@ function useViewportState<T>(viewportId: string, selector: (state: ViewportState
 - **`selector`** — the component re-renders only when the selected value changes by `Object.is`. Never called while the viewport is absent.
 - **`options.batch`** (default `true`) — coalesce Engine events to at most one update per animation frame, so a drag produces one render per frame instead of one per event. Set `false` for event-exact updates.
 
-`ViewportState` is a discriminated union — narrow on `kind` before reading kind-specific fields:
+`ViewportState` is a discriminated union. `sliceIndex` / `numberOfSlices` (the Slice Position) are common to every kind, so one slider serves Stack and MPR screens; narrow on `kind` for the rest:
 
 ```ts
-interface StackViewportState  { kind: 'stack';  camera: Types.ICamera; voiRange: Types.VOIRange | undefined; imageIdIndex: number }
-interface VolumeViewportState { kind: 'volume'; camera: Types.ICamera; voiRange: Types.VOIRange | undefined }
+interface ViewportStateCommon { camera: Types.ICamera; voiRange: Types.VOIRange | undefined; sliceIndex: number | undefined; numberOfSlices: number | undefined }
+interface StackViewportState  extends ViewportStateCommon { kind: 'stack';  sliceIndex: number; numberOfSlices: number }
+interface VolumeViewportState extends ViewportStateCommon { kind: 'volume' }
 type ViewportState = StackViewportState | VolumeViewportState;
 ```
 
-Every state object is a deep-frozen Snapshot, and the reference stays identical until the state actually changes. `imageIdIndex` is the *requested* slice — it updates the moment a scroll happens, not when the image finishes loading ([ADR 0003](./docs/adr/0003-image-id-index-is-the-requested-slice.md)).
+Every state object is a deep-frozen Snapshot, and the reference stays identical until the state actually changes. On a Stack, `sliceIndex` is the *requested* slice — it updates the moment a scroll happens, not when the image finishes loading ([ADR 0003](./docs/adr/0003-image-id-index-is-the-requested-slice.md)). On a Volume it derives from the camera, so it never runs ahead of the pixels. A viewport without slices (3D, or a Volume before `setVolumes`) reports `undefined` for both fields.
 
 ### `<CornerstoneViewport />`
 
@@ -127,12 +128,13 @@ A missing Engine at mount is a mount-ordering bug, so the component throws inste
 
 ## Status
 
-v0.1 — sync only. The library's sole responsibility is state synchronization.
+v0.2 — sync only. The library's sole responsibility is state synchronization.
 
 | Capability | Status |
 |---|---|
 | Stack viewport state (camera, VOI, slice index) | ✅ |
 | Volume viewport state + per-kind types | ✅ |
+| Slice Position (`sliceIndex`, `numberOfSlices`) common to both kinds | ✅ |
 | Absent-viewport contract (`undefined`) | ✅ |
 | Shared per-viewport Binding, StrictMode-safe | ✅ |
 | Auto fill-in / empty-out on viewport enable/destroy | ✅ |
