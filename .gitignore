@@ -11,3 +11,7 @@ yarn-error.log*
 .pnp.js
 
 .vscode/*
+# local-only: agent scratch, editor, tooling
+/.scratch
+/.claude
+/.idea
