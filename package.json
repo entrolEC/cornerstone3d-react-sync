@@ -1,5 +1,5 @@
 {
-  "name": "cornerstone3d-react-sync",
+  "name": "react-cornerstone3d",
   "version": "0.1.0",
   "description": "React bindings that expose Cornerstone3D's live engine state to React, tearing-free, via useSyncExternalStore",
   "type": "module",
@@ -17,7 +17,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "peerDependencies": {
     "@cornerstonejs/core": "^5.0.0",
@@ -37,5 +38,20 @@
     "typescript": "^5.5.3",
     "vitest": "^3.0.0"
   },
-  "private": true
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/entrolEC/react-cornerstone3d.git"
+  },
+  "homepage": "https://github.com/entrolEC/react-cornerstone3d#readme",
+  "keywords": [
+    "cornerstone3d",
+    "cornerstonejs",
+    "react",
+    "hooks",
+    "useSyncExternalStore",
+    "dicom",
+    "medical-imaging"
+  ],
+  "sideEffects": false
 }

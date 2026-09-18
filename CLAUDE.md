@@ -1,4 +1,4 @@
-# cornerstone3d-react-sync
+# react-cornerstone3d
 
 ## Agent skills
 

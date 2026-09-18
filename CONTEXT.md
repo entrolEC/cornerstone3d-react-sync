@@ -1,4 +1,4 @@
-# cornerstone3d-react-sync
+# react-cornerstone3d
 
 React bindings that expose Cornerstone3D's live engine state to React components, tearing-free, via `useSyncExternalStore`.
 
