@@ -4,11 +4,17 @@
 
 React bindings that expose [Cornerstone3D](https://www.cornerstonejs.org/)'s live engine state to React components — tearing-free, via `useSyncExternalStore`.
 
+```bash
+npm install react-cornerstone3d
+```
+
 ```tsx
+import { useViewportState } from 'react-cornerstone3d';
+
 function SliceIndicator() {
-  const state = useViewportState('ct-axial');
-  if (!state) return null; // viewport not enabled yet — a normal state, your call what to show
-  return <span>slice {state.imageIdIndex + 1}</span>;
+  const index = useViewportState('ct-axial', (s) => (s.kind === 'stack' ? s.imageIdIndex : undefined));
+  if (index === undefined) return null; // viewport not enabled yet — a normal state, your call what to show
+  return <span>slice {index + 1}</span>;
 }
 ```
 
@@ -75,23 +81,67 @@ Three decisions shape everything (full rationale in [`docs/adr/`](./docs/adr/)):
 
 On top of that, the Snapshot layer guarantees **referential stability** (unchanged state ⇒ identical reference, no wasted renders, no loops) and **immutability** (deep-frozen — nothing you receive can drift under you).
 
+## API
+
+### `useViewportState(viewportId, selector?, options?)`
+
+```ts
+function useViewportState(viewportId: string, selector?: undefined, options?: UseViewportStateOptions): ViewportState | undefined;
+function useViewportState<T>(viewportId: string, selector: (state: ViewportState) => T, options?: UseViewportStateOptions): T | undefined;
+```
+
+- **`viewportId`** — resolved through Cornerstone3D's global registry. Returns `undefined` while no viewport with that id is enabled.
+- **`selector`** — the component re-renders only when the selected value changes by `Object.is`. Never called while the viewport is absent.
+- **`options.batch`** (default `true`) — coalesce Engine events to at most one update per animation frame, so a drag produces one render per frame instead of one per event. Set `false` for event-exact updates.
+
+`ViewportState` is a discriminated union — narrow on `kind` before reading kind-specific fields:
+
+```ts
+interface StackViewportState  { kind: 'stack';  camera: Types.ICamera; voiRange: Types.VOIRange | undefined; imageIdIndex: number }
+interface VolumeViewportState { kind: 'volume'; camera: Types.ICamera; voiRange: Types.VOIRange | undefined }
+type ViewportState = StackViewportState | VolumeViewportState;
+```
+
+Every state object is a deep-frozen Snapshot, and the reference stays identical until the state actually changes. `imageIdIndex` is the *requested* slice — it updates the moment a scroll happens, not when the image finishes loading ([ADR 0003](./docs/adr/0003-image-id-index-is-the-requested-slice.md)).
+
+### `<CornerstoneViewport />`
+
+Optional. Renders a `<div>`, enables it as a viewport on mount and disables it on unmount. The Engine stays app-created — the component only resolves it through the registry.
+
+```tsx
+import { Enums } from '@cornerstonejs/core';
+import { CornerstoneViewport } from 'react-cornerstone3d';
+
+<CornerstoneViewport viewportId="ct-axial" type={Enums.ViewportType.STACK} style={{ width: 512, height: 512 }} />
+```
+
+| Prop | Description |
+|---|---|
+| `viewportId` | Id to enable — the same id `useViewportState` observes. |
+| `type` | `Enums.ViewportType`, passed to `enableElement`. |
+| `defaultOptions?` | `Types.ViewportInputOptions`, applied once at enable time. Later changes do not re-enable. |
+| `renderingEngineId?` | Engine to enable on. Defaults to the app's single registered Engine; throws if there are zero or several and no id is given. |
+| `...divProps` | Everything else goes to the `<div>`. |
+
+A missing Engine at mount is a mount-ordering bug, so the component throws instead of degrading — unlike hooks, where viewport absence is a normal state.
+
 ## Status
 
-v1 in progress. Sync only — the library's sole responsibility is state synchronization.
+v0.1 — sync only. The library's sole responsibility is state synchronization.
 
 | Capability | Status |
 |---|---|
 | Stack viewport state (camera, VOI, slice index) | ✅ |
+| Volume viewport state + per-kind types | ✅ |
 | Absent-viewport contract (`undefined`) | ✅ |
 | Shared per-viewport Binding, StrictMode-safe | ✅ |
 | Auto fill-in / empty-out on viewport enable/destroy | ✅ |
-| Selectors (re-render only when *your* value changes) | 🔜 |
-| rAF batching for interaction-rate events | 🔜 |
-| Volume viewport state + per-kind types | 🔜 |
-| Optional `<CornerstoneViewport />` component | 🔜 |
-| Annotation / tool / segmentation state | roadmap (post-v1) |
+| Selectors (re-render only when *your* value changes) | ✅ |
+| rAF batching for interaction-rate events | ✅ |
+| Optional `<CornerstoneViewport />` component | ✅ |
+| Annotation / tool / segmentation state | roadmap |
 
-**Requires:** React 18+, `@cornerstonejs/core` 5.x.
+**Requires:** React 18+, `@cornerstonejs/core` 5.x. Ships ESM only.
 
 ## Out of scope
 
@@ -100,8 +150,9 @@ App state management (use Zustand or whatever you like), write helpers, engine/v
 ## Development
 
 ```bash
-npm test        # vitest, jsdom + fake CS3D registry
-npm run build   # tsc → dist/
+npx playwright install chromium   # once — the browser tests run against real Cornerstone3D
+npm test                          # unit (jsdom + fake CS3D registry) and browser (headless Chromium) projects
+npm run build                     # tsc → dist/
 ```
 
-Tests observe only the public hook API — hook return values, referential stability, re-render counts. Domain vocabulary (Engine, Viewport State, Snapshot, Command, Binding) lives in [`CONTEXT.md`](./CONTEXT.md).
+Unit tests observe only the public hook API — return values, referential stability, re-render counts. Browser tests drive a real Engine to verify the assumptions the fake makes. Domain vocabulary (Engine, Viewport State, Snapshot, Command, Binding) lives in [`CONTEXT.md`](./CONTEXT.md).

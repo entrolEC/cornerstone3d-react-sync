@@ -4,11 +4,17 @@
 
 [Cornerstone3D](https://www.cornerstonejs.org/)의 살아있는 엔진 상태를 React 컴포넌트에 노출하는 React 바인딩 — `useSyncExternalStore` 기반, tearing 없음.
 
+```bash
+npm install react-cornerstone3d
+```
+
 ```tsx
+import { useViewportState } from 'react-cornerstone3d';
+
 function SliceIndicator() {
-  const state = useViewportState('ct-axial');
-  if (!state) return null; // 뷰포트가 아직 enable 전 — 정상 상태이며, 뭘 보여줄지는 앱의 몫
-  return <span>slice {state.imageIdIndex + 1}</span>;
+  const index = useViewportState('ct-axial', (s) => (s.kind === 'stack' ? s.imageIdIndex : undefined));
+  if (index === undefined) return null; // 뷰포트가 아직 enable 전 — 정상 상태이며, 뭘 보여줄지는 앱의 몫
+  return <span>slice {index + 1}</span>;
 }
 ```
 
@@ -75,23 +81,67 @@ Cornerstone3D는 의도적으로 프레임워크 비종속이며 React 바인딩
 
 그 위에서 Snapshot 계층이 **참조 안정성**(상태 무변경 ⇒ 동일 참조, 낭비 리렌더 없음, 루프 없음)과 **불변성**(deep-frozen — 받은 객체가 나중에 변하지 않음)을 보장합니다.
 
+## API
+
+### `useViewportState(viewportId, selector?, options?)`
+
+```ts
+function useViewportState(viewportId: string, selector?: undefined, options?: UseViewportStateOptions): ViewportState | undefined;
+function useViewportState<T>(viewportId: string, selector: (state: ViewportState) => T, options?: UseViewportStateOptions): T | undefined;
+```
+
+- **`viewportId`** — Cornerstone3D 전역 레지스트리로 뷰포트를 찾습니다. 해당 id의 뷰포트가 enable되어 있지 않으면 `undefined`를 반환합니다.
+- **`selector`** — 선택한 값이 `Object.is` 기준으로 바뀔 때만 컴포넌트가 리렌더됩니다. 뷰포트 부재 중에는 호출되지 않습니다.
+- **`options.batch`** (기본 `true`) — Engine 이벤트를 애니메이션 프레임당 최대 한 번의 업데이트로 합칩니다. 드래그 중 이벤트마다가 아니라 프레임마다 한 번 렌더됩니다. 이벤트 단위 정확도가 필요하면 `false`.
+
+`ViewportState`는 판별 유니온입니다 — kind별 필드를 읽기 전에 `kind`로 좁히세요:
+
+```ts
+interface StackViewportState  { kind: 'stack';  camera: Types.ICamera; voiRange: Types.VOIRange | undefined; imageIdIndex: number }
+interface VolumeViewportState { kind: 'volume'; camera: Types.ICamera; voiRange: Types.VOIRange | undefined }
+type ViewportState = StackViewportState | VolumeViewportState;
+```
+
+모든 상태 객체는 deep-frozen Snapshot이며, 상태가 실제로 바뀌기 전까지 참조가 유지됩니다. `imageIdIndex`는 *요청된* 슬라이스입니다 — 이미지 로드가 끝날 때가 아니라 스크롤이 일어난 순간 갱신됩니다 ([ADR 0003](./docs/adr/0003-image-id-index-is-the-requested-slice.md)).
+
+### `<CornerstoneViewport />`
+
+선택 사항. `<div>`를 렌더링하고 마운트 시 뷰포트로 enable, 언마운트 시 disable합니다. Engine은 앱이 만들고, 컴포넌트는 레지스트리로 찾기만 합니다.
+
+```tsx
+import { Enums } from '@cornerstonejs/core';
+import { CornerstoneViewport } from 'react-cornerstone3d';
+
+<CornerstoneViewport viewportId="ct-axial" type={Enums.ViewportType.STACK} style={{ width: 512, height: 512 }} />
+```
+
+| Prop | 설명 |
+|---|---|
+| `viewportId` | enable할 id — `useViewportState`가 관찰하는 id와 같습니다. |
+| `type` | `Enums.ViewportType`, `enableElement`에 그대로 전달. |
+| `defaultOptions?` | `Types.ViewportInputOptions`, enable 시점에 한 번만 적용. 이후 변경해도 재-enable하지 않습니다. |
+| `renderingEngineId?` | enable할 Engine. 기본값은 앱에 등록된 유일한 Engine이며, 0개 또는 여러 개인데 id가 없으면 throw합니다. |
+| `...divProps` | 나머지는 모두 `<div>`로 전달. |
+
+마운트 시 Engine이 없는 것은 마운트 순서 버그이므로 컴포넌트는 조용히 넘어가지 않고 throw합니다 — 뷰포트 부재를 정상 상태로 보는 훅과 다른 점입니다.
+
 ## 현재 상태
 
-v1 진행 중. 동기화만 — 이 라이브러리의 유일한 책임은 상태 동기화입니다.
+v0.1 — 동기화만. 이 라이브러리의 유일한 책임은 상태 동기화입니다.
 
 | 기능 | 상태 |
 |---|---|
 | Stack 뷰포트 상태 (카메라, VOI, 슬라이스 인덱스) | ✅ |
+| Volume 뷰포트 상태 + kind별 타입 | ✅ |
 | 뷰포트 부재 계약 (`undefined`) | ✅ |
 | viewportId당 공유 Binding, StrictMode 안전 | ✅ |
 | 뷰포트 enable/destroy 시 자동 채움/비움 | ✅ |
-| 셀렉터 (내가 쓰는 값이 바뀔 때만 리렌더) | 🔜 |
-| 고빈도 이벤트 rAF 배칭 | 🔜 |
-| Volume 뷰포트 상태 + kind별 타입 | 🔜 |
-| 선택적 `<CornerstoneViewport />` 컴포넌트 | 🔜 |
-| 어노테이션 / 툴 / 세그멘테이션 상태 | 로드맵 (post-v1) |
+| 셀렉터 (내가 쓰는 값이 바뀔 때만 리렌더) | ✅ |
+| 고빈도 이벤트 rAF 배칭 | ✅ |
+| 선택적 `<CornerstoneViewport />` 컴포넌트 | ✅ |
+| 어노테이션 / 툴 / 세그멘테이션 상태 | 로드맵 |
 
-**요구사항:** React 18+, `@cornerstonejs/core` 5.x.
+**요구사항:** React 18+, `@cornerstonejs/core` 5.x. ESM만 제공합니다.
 
 ## 범위 밖
 
@@ -100,8 +150,9 @@ v1 진행 중. 동기화만 — 이 라이브러리의 유일한 책임은 상�
 ## 개발
 
 ```bash
-npm test        # vitest, jsdom + 가짜 CS3D 레지스트리
-npm run build   # tsc → dist/
+npx playwright install chromium   # 최초 1회 — 브라우저 테스트는 실제 Cornerstone3D로 돕니다
+npm test                          # unit(jsdom + 가짜 CS3D 레지스트리)과 browser(headless Chromium) 프로젝트
+npm run build                     # tsc → dist/
 ```
 
-테스트는 공개 훅 API만 관찰합니다 — 훅 반환값, 참조 안정성, 리렌더 횟수. 도메인 용어(Engine, Viewport State, Snapshot, Command, Binding)는 [`CONTEXT.md`](./CONTEXT.md)에 있습니다.
+유닛 테스트는 공개 훅 API만 관찰합니다 — 반환값, 참조 안정성, 리렌더 횟수. 브라우저 테스트는 실제 Engine을 구동해 가짜가 세운 가정을 검증합니다. 도메인 용어(Engine, Viewport State, Snapshot, Command, Binding)는 [`CONTEXT.md`](./CONTEXT.md)에 있습니다.
