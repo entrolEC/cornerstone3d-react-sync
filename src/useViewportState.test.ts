@@ -3,7 +3,12 @@ import { Enums, eventTarget, getEnabledElementByViewportId } from '@cornerstonej
 import { act, renderHook } from '@testing-library/react';
 import { createElement, StrictMode, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { useViewportState, type ViewportState, type VolumeViewportState } from './index';
+import {
+  useViewportState,
+  type StackViewportState,
+  type ViewportState,
+  type VolumeViewportState,
+} from './index';
 
 // Real module loads (validates the peer dep under jsdom); only the registry
 // lookup is replaced by a Map so several fake viewports can coexist.
@@ -88,28 +93,40 @@ function createFakeStackViewport(viewportId: string, { enabled = true } = {}) {
   const engineState = {
     ...fakeCameraState(),
     voiRange: { lower: 0, upper: 400 },
-    imageIdIndex: 0,
+    sliceIndex: 0,
   };
   const viewport = {
     element: document.createElement('div'),
     type: Enums.ViewportType.STACK,
     getCamera: cameraGetter(engineState),
     getProperties: () => ({ voiRange: { ...engineState.voiRange } }),
-    getCurrentImageIdIndex: () => engineState.imageIdIndex,
+    getSliceIndex: () => engineState.sliceIndex,
+    getNumberOfSlices: () => 3,
   };
   return { engineState, ...wireFakeViewport(viewportId, viewport, enabled) };
 }
 
-function createFakeVolumeViewport(viewportId: string, { enabled = true } = {}) {
+function createFakeVolumeViewport(
+  viewportId: string,
+  { enabled = true, type = Enums.ViewportType.ORTHOGRAPHIC } = {},
+) {
   const engineState = {
     ...fakeCameraState(),
     voiRange: { lower: -1000, upper: 1000 },
+    // Mirrors CS3D: both getters return undefined until setVolumes lands.
+    sliceIndex: undefined as number | undefined,
+    numberOfSlices: undefined as number | undefined,
   };
   const viewport = {
     element: document.createElement('div'),
-    type: Enums.ViewportType.ORTHOGRAPHIC,
+    type,
     getCamera: cameraGetter(engineState),
     getProperties: () => ({ voiRange: { ...engineState.voiRange } }),
+    getSliceIndex: () => engineState.sliceIndex,
+    // VOLUME_3D's class has no getNumberOfSlices at all — mirror that.
+    ...(type === Enums.ViewportType.VOLUME_3D
+      ? {}
+      : { getNumberOfSlices: () => engineState.numberOfSlices }),
   };
   return { engineState, ...wireFakeViewport(viewportId, viewport, enabled) };
 }
@@ -119,7 +136,7 @@ const strictModeWrapper = ({ children }: { children: ReactNode }) =>
 
 // Tests know their fake is a Stack viewport; narrow for Stack-only fields.
 const asStack = (s: ViewportState | undefined) => (s?.kind === 'stack' ? s : undefined);
-const selectStackIndex = (s: ViewportState) => asStack(s)?.imageIdIndex;
+const selectStackIndex = (s: ViewportState) => asStack(s)?.sliceIndex;
 
 describe('useViewportState', () => {
   test('returns undefined when the viewport does not exist', () => {
@@ -137,7 +154,8 @@ describe('useViewportState', () => {
       kind: 'stack',
       camera: engineState.camera,
       voiRange: engineState.voiRange,
-      imageIdIndex: engineState.imageIdIndex,
+      sliceIndex: engineState.sliceIndex,
+      numberOfSlices: 3,
     });
   });
 
@@ -165,10 +183,10 @@ describe('useViewportState', () => {
     const { engineState, fire } = createFakeStackViewport('vp-stack');
     const { result } = renderHook(() => useViewportState('vp-stack'));
 
-    engineState.imageIdIndex = 42;
+    engineState.sliceIndex = 42;
     fire(Enums.Events.STACK_NEW_IMAGE);
 
-    expect(asStack(result.current)?.imageIdIndex).toBe(42);
+    expect(asStack(result.current)?.sliceIndex).toBe(42);
   });
 
   test('returns the identical reference across re-renders when state did not change', () => {
@@ -211,10 +229,10 @@ describe('useViewportState', () => {
     const second = renderHook(() => useViewportState('vp-remaining'));
 
     first.unmount();
-    engineState.imageIdIndex = 5;
+    engineState.sliceIndex = 5;
     fire(Enums.Events.STACK_NEW_IMAGE);
 
-    expect(asStack(second.result.current)?.imageIdIndex).toBe(5);
+    expect(asStack(second.result.current)?.sliceIndex).toBe(5);
   });
 
   test('returns fresh state on remount after the Engine changed while unobserved', () => {
@@ -222,10 +240,10 @@ describe('useViewportState', () => {
     const first = renderHook(() => useViewportState('vp-remount'));
     first.unmount();
 
-    engineState.imageIdIndex = 9;
+    engineState.sliceIndex = 9;
     const second = renderHook(() => useViewportState('vp-remount'));
 
-    expect(asStack(second.result.current)?.imageIdIndex).toBe(9);
+    expect(asStack(second.result.current)?.sliceIndex).toBe(9);
   });
 
   test('unsubscribes from the Engine when the last consumer unmounts', () => {
@@ -257,9 +275,9 @@ describe('useViewportState', () => {
     const liveTypes = new Set(addSpy.mock.calls.map(([type]) => type));
     expect(liveAfterMount).toBe(liveTypes.size);
 
-    engineState.imageIdIndex = 7;
+    engineState.sliceIndex = 7;
     fire(Enums.Events.STACK_NEW_IMAGE);
-    expect(asStack(result.current)?.imageIdIndex).toBe(7);
+    expect(asStack(result.current)?.sliceIndex).toBe(7);
 
     unmount();
     expect(addSpy.mock.calls.length).toBe(removeSpy.mock.calls.length);
@@ -276,7 +294,8 @@ describe('useViewportState', () => {
       kind: 'stack',
       camera: engineState.camera,
       voiRange: engineState.voiRange,
-      imageIdIndex: engineState.imageIdIndex,
+      sliceIndex: engineState.sliceIndex,
+      numberOfSlices: 3,
     });
   });
 
@@ -296,10 +315,10 @@ describe('useViewportState', () => {
 
     disable();
     enable();
-    engineState.imageIdIndex = 11;
+    engineState.sliceIndex = 11;
     fire(Enums.Events.STACK_NEW_IMAGE);
 
-    expect(asStack(result.current)?.imageIdIndex).toBe(11);
+    expect(asStack(result.current)?.sliceIndex).toBe(11);
   });
 
   test('ignores lifecycle events for other viewports', () => {
@@ -383,7 +402,7 @@ describe('useViewportState', () => {
       });
       const rendersBefore = renders;
 
-      engineState.imageIdIndex = 42;
+      engineState.sliceIndex = 42;
       fire(Enums.Events.STACK_NEW_IMAGE);
 
       expect(result.current).toBe(42);
@@ -399,7 +418,8 @@ describe('useViewportState', () => {
         kind: 'stack',
         camera: engineState.camera,
         voiRange: engineState.voiRange,
-        imageIdIndex: engineState.imageIdIndex,
+        sliceIndex: engineState.sliceIndex,
+        numberOfSlices: 3,
       });
     });
 
@@ -512,8 +532,49 @@ describe('useViewportState', () => {
         kind: 'volume',
         camera: engineState.camera,
         voiRange: engineState.voiRange,
+        sliceIndex: undefined,
+        numberOfSlices: undefined,
       });
-      expect(result.current && 'imageIdIndex' in result.current).toBe(false);
+    });
+
+    test('Slice Position arrives with the volume (VOLUME_VIEWPORT_NEW_VOLUME) and follows the camera', () => {
+      const { engineState, fire } = createFakeVolumeViewport('vp-vol-slices');
+      const { result } = renderHook(() => useViewportState('vp-vol-slices'));
+      expect(result.current?.numberOfSlices).toBeUndefined();
+
+      engineState.sliceIndex = 0;
+      engineState.numberOfSlices = 40;
+      fire(Enums.Events.VOLUME_VIEWPORT_NEW_VOLUME);
+      expect(result.current?.numberOfSlices).toBe(40);
+
+      engineState.sliceIndex = 7;
+      fire(Enums.Events.CAMERA_MODIFIED);
+      expect(result.current?.sliceIndex).toBe(7);
+    });
+
+    test('a 3D volume viewport has no Slice Position and its getters are never called', () => {
+      // The fake has no getNumberOfSlices, like CS3D's 3D class: calling it would throw.
+      createFakeVolumeViewport('vp-vol-3d', { type: Enums.ViewportType.VOLUME_3D });
+      const { result } = renderHook(() => useViewportState('vp-vol-3d'));
+      expect(result.current?.kind).toBe('volume');
+      expect(result.current?.sliceIndex).toBeUndefined();
+      expect(result.current?.numberOfSlices).toBeUndefined();
+    });
+
+    test('one selector reads Slice Position from Stack and Volume alike', () => {
+      const stack = createFakeStackViewport('vp-slider-stack');
+      const volume = createFakeVolumeViewport('vp-slider-vol');
+      volume.engineState.sliceIndex = 3;
+      volume.engineState.numberOfSlices = 10;
+      const slider = (s: ViewportState) => `${s.sliceIndex}/${s.numberOfSlices}`;
+      const { result } = renderHook(() => ({
+        stack: useViewportState('vp-slider-stack', slider),
+        volume: useViewportState('vp-slider-vol', slider),
+      }));
+      stack.engineState.sliceIndex = 2;
+      stack.fire(Enums.Events.PRE_STACK_NEW_IMAGE);
+      expect(result.current.stack).toBe('2/3');
+      expect(result.current.volume).toBe('3/10');
     });
 
     test('camera Engine events sync Volume state', () => {
@@ -544,27 +605,27 @@ describe('useViewportState', () => {
         volume: useViewportState('vp-mix-vol'),
       }));
 
-      stack.engineState.imageIdIndex = 7;
+      stack.engineState.sliceIndex = 7;
       stack.fire(Enums.Events.STACK_NEW_IMAGE);
       volume.engineState.camera.parallelScale = 33;
       volume.fire(Enums.Events.CAMERA_MODIFIED);
 
       expect(result.current.stack?.kind).toBe('stack');
-      expect(asStack(result.current.stack)?.imageIdIndex).toBe(7);
+      expect(asStack(result.current.stack)?.sliceIndex).toBe(7);
       expect(result.current.stack?.camera.parallelScale).toBe(100); // untouched
       expect(result.current.volume?.kind).toBe('volume');
       expect(result.current.volume?.camera.parallelScale).toBe(33);
     });
 
-    test('type-level: Stack-only fields are not accessible on Volume state', () => {
-      const volumeOnly = (state: VolumeViewportState) => {
-        // @ts-expect-error — imageIdIndex is Stack-only
-        return state.imageIdIndex;
-      };
-      const union = (state: ViewportState) => {
-        // @ts-expect-error — union requires narrowing by kind first
-        return state.imageIdIndex;
-      };
+    test('type-level: a Stack always has a Slice Position, a Volume may not', () => {
+      const stackOnly = (state: StackViewportState): number => state.sliceIndex;
+      const volumeOnly = (state: VolumeViewportState): number =>
+        // @ts-expect-error — a Volume may have no Slice Position (3D, before data)
+        state.sliceIndex;
+      const union = (state: ViewportState): number =>
+        // @ts-expect-error — narrow by kind first
+        state.numberOfSlices;
+      expect(stackOnly).toBeDefined();
       expect(volumeOnly).toBeDefined();
       expect(union).toBeDefined();
     });
@@ -576,11 +637,11 @@ describe('useViewportState', () => {
     const before = result.current;
 
     engineState.camera.parallelScale = 25;
-    engineState.imageIdIndex = 3;
+    engineState.sliceIndex = 3;
     fire(Enums.Events.CAMERA_MODIFIED);
 
     expect(before?.camera.parallelScale).toBe(100);
-    expect(asStack(before)?.imageIdIndex).toBe(0);
+    expect(asStack(before)?.sliceIndex).toBe(0);
     expect(Object.isFrozen(result.current)).toBe(true);
     expect(Object.isFrozen(result.current?.camera)).toBe(true);
   });

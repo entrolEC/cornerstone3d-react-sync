@@ -129,14 +129,15 @@ test('Stack viewport: real Engine state changes reach the hook', async () => {
 
   const { result } = renderHook(() => useViewportState('stack-vp'));
   await waitFor(() => expect(result.current?.kind).toBe('stack'));
-  expect((result.current as StackViewportState).imageIdIndex).toBe(0);
+  expect((result.current as StackViewportState).sliceIndex).toBe(0);
+  expect((result.current as StackViewportState).numberOfSlices).toBe(imageIds.length);
 
   viewport.setProperties({ voiRange: { lower: 10, upper: 20 } });
   await waitFor(() => expect(result.current?.voiRange).toEqual({ lower: 10, upper: 20 }));
 
   await viewport.setImageIdIndex(2);
   await waitFor(() =>
-    expect((result.current as StackViewportState).imageIdIndex).toBe(2),
+    expect((result.current as StackViewportState).sliceIndex).toBe(2),
   );
 
   const before = result.current!.camera.parallelScale!;
@@ -146,7 +147,7 @@ test('Stack viewport: real Engine state changes reach the hook', async () => {
   );
 });
 
-test('Stack viewport: imageIdIndex is the requested slice even when the image never loads', async () => {
+test('Stack viewport: sliceIndex is the requested slice even when the image never loads', async () => {
   engine = new RenderingEngine('smoke-engine');
   engine.enableElement({
     viewportId: 'stack-fail-vp',
@@ -172,7 +173,7 @@ test('Stack viewport: imageIdIndex is the requested slice even when the image ne
   try {
     await viewport.setImageIdIndex(3).catch(() => undefined);
     await waitFor(() =>
-      expect((result.current as StackViewportState).imageIdIndex).toBe(3),
+      expect((result.current as StackViewportState).sliceIndex).toBe(3),
     );
   } finally {
     window.removeEventListener('unhandledrejection', swallow);
@@ -212,11 +213,29 @@ test('Volume viewport: real Engine state changes reach the hook', async () => {
     element: makeElement(),
   });
   const viewport = engine.getViewport('volume-vp') as Types.IVolumeViewport;
-  await viewport.setVolumes([{ volumeId }]);
-  viewport.render();
 
+  // Subscribe before setVolumes: no Slice Position yet, and it must arrive on
+  // VOLUME_VIEWPORT_NEW_VOLUME alone — no render/resetCamera in between.
   const { result } = renderHook(() => useViewportState('volume-vp'));
   await waitFor(() => expect(result.current?.kind).toBe('volume'));
+  expect(result.current?.numberOfSlices).toBeUndefined();
+
+  await viewport.setVolumes([{ volumeId }]);
+  await waitFor(() => expect(result.current?.numberOfSlices).toBe(4));
+  viewport.render();
+
+  // Slice index derives from the camera: the focal point's projection onto
+  // viewPlaneNormal. Step one slice (spacing 1) along the normal, away from the end.
+  const { focalPoint, position, viewPlaneNormal } = viewport.getCamera();
+  const startIndex = result.current!.sliceIndex!;
+  const step = startIndex < 3 ? 1 : -1;
+  const shift = (p: Types.Point3): Types.Point3 => [
+    p[0] + step * viewPlaneNormal![0],
+    p[1] + step * viewPlaneNormal![1],
+    p[2] + step * viewPlaneNormal![2],
+  ];
+  viewport.setCamera({ focalPoint: shift(focalPoint!), position: shift(position!) });
+  await waitFor(() => expect(result.current?.sliceIndex).toBe(startIndex + step));
 
   viewport.setProperties({ voiRange: { lower: 5, upper: 50 } });
   await waitFor(() => expect(result.current?.voiRange).toEqual({ lower: 5, upper: 50 }));

@@ -34,7 +34,8 @@ function createFakeEngine(id = 'engine') {
         type,
         getCamera: (): Types.ICamera => ({ parallelScale: 100 }),
         getProperties: () => ({ voiRange: { lower: 0, upper: 400 } }),
-        getCurrentImageIdIndex: () => 0,
+        getSliceIndex: () => 0,
+        getNumberOfSlices: () => 1,
       };
       registry.set(viewportId, { viewport });
       eventTarget.dispatchEvent(

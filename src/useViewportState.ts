@@ -6,12 +6,21 @@ import { useCallback, useRef, useSyncExternalStore } from 'react';
 interface ViewportStateCommon {
   readonly camera: Types.ICamera;
   readonly voiRange: Types.VOIRange | undefined;
+  /**
+   * Slice Position, as the Engine reports it: `undefined` when the viewport
+   * has no slices (3D, or a Volume before its data arrives). Shared by every
+   * kind so one slice control serves Stack and Volume alike.
+   */
+  readonly sliceIndex: number | undefined;
+  readonly numberOfSlices: number | undefined;
 }
 
 /** Observable state of one Stack viewport. Immutable Snapshot (deep-frozen). */
 export interface StackViewportState extends ViewportStateCommon {
   readonly kind: 'stack';
-  readonly imageIdIndex: number;
+  /** The requested slice (ADR 0003); a Stack always reports a number. */
+  readonly sliceIndex: number;
+  readonly numberOfSlices: number;
 }
 
 /** Observable state of one Volume viewport. Immutable Snapshot (deep-frozen). */
@@ -27,12 +36,25 @@ export type ViewportState = StackViewportState | VolumeViewportState;
 // and fires this before queuing the load; STACK_NEW_IMAGE fires only on load
 // success, so on its own the index lags and a failed load leaves it stale
 // forever. Both stay: display can still change VOI (ADR 0003).
+// VOLUME_VIEWPORT_NEW_VOLUME: setVolumes() changes numberOfSlices but fires
+// no CAMERA_MODIFIED of its own; without it the count stays stale until the
+// app happens to move the camera. A Volume's slice index derives from the
+// camera, so CAMERA_MODIFIED already covers scrolling.
 const ELEMENT_EVENTS = [
   Enums.Events.CAMERA_MODIFIED,
   Enums.Events.VOI_MODIFIED,
   Enums.Events.PRE_STACK_NEW_IMAGE,
   Enums.Events.STACK_NEW_IMAGE,
+  Enums.Events.VOLUME_VIEWPORT_NEW_VOLUME,
 ];
+
+// Only these types map to CS3D's VolumeViewport class, the one with slices.
+// VOLUME_3D's class returns null from getSliceIndex and lacks
+// getNumberOfSlices entirely (calling it throws).
+const SLICED_VOLUME_TYPES: ReadonlySet<string> = new Set([
+  Enums.ViewportType.ORTHOGRAPHIC,
+  Enums.ViewportType.PERSPECTIVE,
+]);
 
 function deepFreeze<T>(value: T): T {
   if (typeof value === 'object' && value !== null) {
@@ -58,7 +80,7 @@ function camerasEqual(a: Types.ICamera, b: Types.ICamera): boolean {
 
 function statesEqual(a: ViewportState, b: ViewportState): boolean {
   if (a.kind !== b.kind) return false;
-  if (a.kind === 'stack' && b.kind === 'stack' && a.imageIdIndex !== b.imageIdIndex) return false;
+  if (a.sliceIndex !== b.sliceIndex || a.numberOfSlices !== b.numberOfSlices) return false;
   return (
     a.voiRange?.lower === b.voiRange?.lower &&
     a.voiRange?.upper === b.voiRange?.upper &&
@@ -100,16 +122,21 @@ function createBinding(viewportId: string): Binding {
         camera,
         // Engine holds null between setStack and image arrival; our contract is undefined.
         voiRange: structuredClone(stack.getProperties().voiRange) ?? undefined,
-        imageIdIndex: stack.getCurrentImageIdIndex(),
+        sliceIndex: stack.getSliceIndex(),
+        numberOfSlices: stack.getNumberOfSlices(),
       });
     }
     // ponytail: every non-Stack kind reads as 'volume' (camera + VOI is the
     // shared surface); split further kinds if video/WSI state is ever needed.
     const volume = viewport as Types.IVolumeViewport;
+    const sliced = SLICED_VOLUME_TYPES.has(viewport.type);
     return deepFreeze<ViewportState>({
       kind: 'volume',
       camera,
       voiRange: structuredClone(volume.getProperties()?.voiRange) ?? undefined,
+      // Engine reports undefined before setVolumes; our contract is undefined too.
+      sliceIndex: sliced ? (volume.getSliceIndex() ?? undefined) : undefined,
+      numberOfSlices: sliced ? (volume.getNumberOfSlices() ?? undefined) : undefined,
     });
   };
 
