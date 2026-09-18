@@ -92,6 +92,9 @@ beforeAll(async () => {
   imageLoader.registerImageLoader('smoke', ((imageId: string) => ({
     promise: Promise.resolve(fakeImage(imageId)),
   })) as unknown as Types.ImageLoaderFn);
+  imageLoader.registerImageLoader('fail', (() => ({
+    promise: Promise.reject(new Error('smoke: image load failure')),
+  })) as unknown as Types.ImageLoaderFn);
   metaData.addProvider(fakeMetaDataProvider);
 });
 
@@ -141,6 +144,39 @@ test('Stack viewport: real Engine state changes reach the hook', async () => {
   await waitFor(() =>
     expect(result.current?.camera.parallelScale).toBeCloseTo(before * 2),
   );
+});
+
+test('Stack viewport: imageIdIndex is the requested slice even when the image never loads', async () => {
+  engine = new RenderingEngine('smoke-engine');
+  engine.enableElement({
+    viewportId: 'stack-fail-vp',
+    type: Enums.ViewportType.STACK,
+    element: makeElement(),
+  });
+  const viewport = engine.getViewport('stack-fail-vp') as Types.IStackViewport;
+  await viewport.setStack([...imageIds, 'fail:3'], 0);
+  viewport.render();
+
+  const { result } = renderHook(() => useViewportState('stack-fail-vp'));
+  await waitFor(() => expect(result.current?.kind).toBe('stack'));
+
+  // CS3D swallows the failure: no STACK_NEW_IMAGE, IMAGE_LOAD_ERROR goes to
+  // eventTarget, and the promise resolves (GPU path) or rejects (CPU path).
+  // PRE_STACK_NEW_IMAGE, fired after the index is assigned, is the only
+  // element event carrying the new index — this fails without it, and fails
+  // if CS3D ever fires it before the assignment (ADR 0003).
+  // CS3D's cache chains a second .then onto the loader promise with no catch,
+  // so the rejection also surfaces as unhandled — swallow it for this test.
+  const swallow = (evt: PromiseRejectionEvent) => evt.preventDefault();
+  window.addEventListener('unhandledrejection', swallow);
+  try {
+    await viewport.setImageIdIndex(3).catch(() => undefined);
+    await waitFor(() =>
+      expect((result.current as StackViewportState).imageIdIndex).toBe(3),
+    );
+  } finally {
+    window.removeEventListener('unhandledrejection', swallow);
+  }
 });
 
 test('Volume viewport: real Engine state changes reach the hook', async () => {

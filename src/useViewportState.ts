@@ -23,9 +23,14 @@ export interface VolumeViewportState extends ViewportStateCommon {
 export type ViewportState = StackViewportState | VolumeViewportState;
 
 // Engine events that invalidate the Snapshot. All fire on viewport.element.
+// PRE_STACK_NEW_IMAGE: StackViewport assigns currentImageIdIndex synchronously
+// and fires this before queuing the load; STACK_NEW_IMAGE fires only on load
+// success, so on its own the index lags and a failed load leaves it stale
+// forever. Both stay: display can still change VOI (ADR 0003).
 const ELEMENT_EVENTS = [
   Enums.Events.CAMERA_MODIFIED,
   Enums.Events.VOI_MODIFIED,
+  Enums.Events.PRE_STACK_NEW_IMAGE,
   Enums.Events.STACK_NEW_IMAGE,
 ];
 
@@ -93,7 +98,8 @@ function createBinding(viewportId: string): Binding {
       return deepFreeze<ViewportState>({
         kind: 'stack',
         camera,
-        voiRange: structuredClone(stack.getProperties().voiRange),
+        // Engine holds null between setStack and image arrival; our contract is undefined.
+        voiRange: structuredClone(stack.getProperties().voiRange) ?? undefined,
         imageIdIndex: stack.getCurrentImageIdIndex(),
       });
     }
@@ -103,7 +109,7 @@ function createBinding(viewportId: string): Binding {
     return deepFreeze<ViewportState>({
       kind: 'volume',
       camera,
-      voiRange: structuredClone(volume.getProperties()?.voiRange),
+      voiRange: structuredClone(volume.getProperties()?.voiRange) ?? undefined,
     });
   };
 
