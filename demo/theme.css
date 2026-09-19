@@ -747,3 +747,49 @@ code {
 .tabs--top {
   margin-top: 2rem;
 }
+
+/* ---------- panel 2: the identity probe ---------- */
+.focus {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  min-height: 17rem;
+}
+.focus__stack {
+  display: grid;
+  gap: 1rem;
+}
+.focus .code {
+  margin-top: 0;
+}
+
+.probe {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 1rem 1.1rem;
+}
+.probe__title {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 0.85rem;
+}
+.probe__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.55rem 0;
+  border-top: 1px solid var(--border);
+}
+.probe__label {
+  font-size: 0.8rem;
+  color: var(--text);
+}
+.probe__result {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+}

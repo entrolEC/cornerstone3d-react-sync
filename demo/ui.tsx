@@ -200,3 +200,63 @@ export class Catch extends Component<
     return this.state.error ? this.props.fallback(this.state.error) : this.props.children;
   }
 }
+
+/* ---------------- stepper ---------------- */
+
+/** Shared by panels 2 and 3 so a walkthrough always looks and works the same. */
+export function Steps({
+  count,
+  index,
+  caption,
+  preparing,
+  next,
+  restart,
+  onNext,
+  onRestart,
+}: {
+  count: number;
+  /** -1 while the panel is still setting itself up. */
+  index: number;
+  caption: ReactNode;
+  preparing: string;
+  next: string;
+  restart: string;
+  onNext: () => void;
+  onRestart: () => void;
+}) {
+  const done = index === count - 1;
+  return (
+    <div className="steps">
+      <div className="steps__dots" aria-hidden>
+        {Array.from({ length: count }, (_, i) => (
+          <span key={i} className={`dot ${i <= index ? 'dot--on' : ''}`} />
+        ))}
+      </div>
+      <p className="steps__caption">
+        {index >= 0 ? (
+          <>
+            <b>{index + 1}.</b> {caption}
+          </>
+        ) : (
+          preparing
+        )}
+      </p>
+      <div className="steps__buttons">
+        {!done && (
+          <button
+            className="button button--primary button--sm"
+            disabled={index < 0}
+            onClick={onNext}
+          >
+            {next}
+          </button>
+        )}
+        {index > 0 && (
+          <button className="button button--secondary button--sm" onClick={onRestart}>
+            {restart}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}

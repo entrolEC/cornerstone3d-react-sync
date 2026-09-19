@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { getEnabledElementByViewportId, type Types } from '@cornerstonejs/core';
-import { Panel, useCopy } from './ui';
+import { Panel, Steps, useCopy } from './ui';
 import { CtViewport } from './CtViewport';
 import {
   BY_HAND_SOURCE,
@@ -38,6 +38,7 @@ const IMAGE_FIRST = [false, true];
 
 export function MountRace({ imageIds }: { imageIds: string[] }) {
   const t = useCopy().panel3;
+  const common = useCopy().common;
   const [storyIndex, setStoryIndex] = useState(0);
   // -1 = before the story starts: no readouts yet, image only where the story needs it.
   const [stepIndex, setStepIndex] = useState(-1);
@@ -99,41 +100,16 @@ export function MountRace({ imageIds }: { imageIds: string[] }) {
         </div>
       </div>
 
-      <div className="steps">
-        <div className="steps__dots" aria-hidden>
-          {stages.map((_, index) => (
-            <span key={index} className={`dot ${index <= stepIndex ? 'dot--on' : ''}`} />
-          ))}
-        </div>
-        <p className="steps__caption">
-          {stage ? (
-            <>
-              <b>{stepIndex + 1}.</b> {story.captions[stepIndex]}
-            </>
-          ) : (
-            t.preparing
-          )}
-        </p>
-        <div className="steps__buttons">
-          {!done && (
-            <button
-              className="button button--primary button--sm"
-              disabled={!stage}
-              onClick={() => setStepIndex((index) => index + 1)}
-            >
-              {t.next}
-            </button>
-          )}
-          {stepIndex > 0 && (
-            <button
-              className="button button--secondary button--sm"
-              onClick={() => setRun((count) => count + 1)}
-            >
-              {t.restart}
-            </button>
-          )}
-        </div>
-      </div>
+      <Steps
+        count={stages.length}
+        index={stepIndex}
+        caption={story.captions[stepIndex]}
+        preparing={common.preparing}
+        next={common.next}
+        restart={common.restart}
+        onNext={() => setStepIndex((index) => index + 1)}
+        onRestart={() => setRun((count) => count + 1)}
+      />
 
       {done && <div className="verdict verdict--bad">{story.verdict}</div>}
     </Panel>

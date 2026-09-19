@@ -12,7 +12,7 @@ interface StoryCopy {
 
 export interface Copy {
   htmlLang: string;
-  common: { copy: string; copied: string };
+  common: { copy: string; copied: string; next: string; restart: string; preparing: string };
   nav: { theme: string };
   hero: {
     chips: string[];
@@ -38,17 +38,23 @@ export interface Copy {
     eyebrow: string;
     title: string;
     lead: ReactNode;
-    tabNaive: string;
-    tabHook: string;
     naiveTitle: string;
     hookTitle: string;
     naiveBadge: string;
-    idle: string;
     run: string;
     again: string;
     crashed: string;
     loop: string;
     decode: string;
+    probe: {
+      title: string;
+      composed: string;
+      camera: string;
+      snapshot: string;
+      same: string;
+      diff: string;
+    };
+    captions: ReactNode[];
     verdict: ReactNode;
   };
   panel3: {
@@ -58,9 +64,6 @@ export interface Copy {
     imageLabel: string;
     imageOff: string;
     notMounted: string;
-    preparing: string;
-    next: string;
-    restart: string;
     stories: StoryCopy[];
   };
   footer: ReactNode;
@@ -71,7 +74,7 @@ const DEMO_NOTE_LINES = 33;
 export const COPY: Record<Lang, Copy> = {
   ko: {
     htmlLang: 'ko',
-    common: { copy: '복사', copied: '복사됨' },
+    common: { copy: '복사', copied: '복사됨', next: '다음 →', restart: '처음부터', preparing: '준비 중…' },
     nav: { theme: '테마 전환' },
     hero: {
       chips: ['v0.2', 'MIT', 'ESM'],
@@ -118,38 +121,53 @@ export const COPY: Record<Lang, Copy> = {
       title: '정석대로 해도, 여기서 막힙니다',
       lead: (
         <>
-          React 18에서 외부 상태를 읽는 정답은 <code>useSyncExternalStore</code>입니다.
-          Cornerstone3D에 그대로 적용하면 어떻게 되는지 직접 눌러보세요 —{' '}
-          <b>이 페이지에서 진짜로 실행됩니다.</b>
+          영상에서 <b>슬라이스 번호와 전체 장수를 읽어 화면에 표시하기.</b> 하고 싶은 건 그게
+          전부입니다. 네 걸음이면, 왜 그게 라이브러리 없이는 안 되는지 보입니다.
         </>
       ),
-      tabNaive: '순진한 구현',
-      tabHook: 'useViewportState',
       naiveTitle: 'useSyncExternalStore',
       hookTitle: 'useViewportState',
       naiveBadge: '직접',
-      idle: '아직 마운트하지 않았습니다',
       run: '마운트하기',
       again: '다시',
       crashed: 'React가 던진 에러',
       loop: '무한 렌더 루프 — React가 렌더링을 중단했습니다',
       decode: '에러 코드 해설',
+      probe: {
+        title: '아무것도 바뀌지 않은 상태에서, 연속으로 두 번 읽어봅니다',
+        composed: '{ slice, total } 로 묶어서 반환',
+        camera: 'viewport.getCamera() 를 그대로 반환',
+        snapshot: '같은 컴포넌트에서 useViewportState 를 두 번',
+        same: '같은 객체',
+        diff: '다른 객체',
+      },
+      captions: [
+        <>
+          React 18에서 엔진 같은 <b>외부 상태를 읽는 정답</b>은 <code>useSyncExternalStore</code>
+          입니다. 오른쪽이 그 정석대로 짠 코드고, 특별한 구석은 하나도 없습니다.
+        </>,
+        <>
+          그런데 <code>getSnapshot</code>이 돌려주는 값을 확인해 보면 —{' '}
+          <b>아무것도 바뀌지 않았는데 매번 다른 객체입니다.</b> 직접 묶어 만든 객체도, 엔진
+          게터가 돌려준 객체도 마찬가지입니다.
+        </>,
+        <>
+          <code>useSyncExternalStore</code>는 <code>Object.is</code>로만 비교합니다. 매번 다른
+          참조를 받으니 <b>"또 바뀌었다"고 판단하고 다시 렌더합니다 — 끝없이.</b> 눌러서 직접
+          확인해 보세요. 에러 경계가 없으면 페이지 전체가 죽습니다.
+        </>,
+        <>
+          훅은 엔진 이벤트가 올 때만 스냅샷을 다시 만들고, 그 사이에는 <b>같은 참조를 돌려줍니다.</b>{' '}
+          그래서 정착합니다. 그리고 이 스냅샷은 <b>뷰포트당 하나로 공유</b>됩니다 — 위젯 안에서는
+          만들 수 없는 이유입니다.
+        </>,
+      ],
       verdict: (
         <>
-          <b>Cornerstone3D 게터는 호출할 때마다 새 객체를 돌려줍니다.</b>{' '}
-          <code>useSyncExternalStore</code>는 <code>getSnapshot</code>의 결과를{' '}
-          <code>Object.is</code>로 비교하므로, 매번 다른 참조를 받으면 영원히 안정되지 않습니다.
-          <br />
-          <br />
-          필드 하나를 숫자로 꺼내 읽으면 우연히 동작합니다 — 패널 1의 훅 예제가{' '}
-          <code>useViewportState</code>를 두 번 호출하는 이유가 그겁니다. 하지만 두 값을 객체로
-          묶는 순간 막힙니다. 탈출구는 <code>useSyncExternalStore</code>를 포기하고{' '}
-          <code>useEffect + setState</code>로 돌아가는 것뿐인데, <b>그게 바로 tearing이 생기는
-          경로입니다.</b>
-          <br />
-          <br />
-          그리고 이 벽은 위젯 안에서 넘을 수 없습니다. 스냅샷은 한 뷰포트의 모든 소비자가{' '}
-          <b>공유</b>해야 참조가 안정되기 때문입니다 — 중앙에 있어야만 하는 이유입니다.
+          <b>이 벽은 위젯 안에서 넘을 수 없습니다.</b> 참조가 안정되려면 스냅샷을 한 뷰포트의 모든
+          소비자가 공유해야 하고, 그건 중앙에 있어야만 가능합니다. 탈출구라고는{' '}
+          <code>useSyncExternalStore</code>를 포기하고 <code>useEffect + setState</code>로
+          돌아가는 것뿐인데 — 그게 바로 tearing이 생기는 경로입니다.
         </>
       ),
     },
@@ -166,9 +184,6 @@ export const COPY: Record<Lang, Copy> = {
       imageLabel: '영상',
       imageOff: '아직 영상이 없음',
       notMounted: '아직 화면에 없음',
-      preparing: '준비 중…',
-      next: '다음 →',
-      restart: '처음부터',
       stories: [
         {
           tab: '영상이 화면보다 늦게 온다',
@@ -235,7 +250,7 @@ export const COPY: Record<Lang, Copy> = {
 
   en: {
     htmlLang: 'en',
-    common: { copy: 'Copy', copied: 'Copied' },
+    common: { copy: 'Copy', copied: 'Copied', next: 'Next →', restart: 'Start over', preparing: 'Setting up…' },
     nav: { theme: 'Toggle theme' },
     hero: {
       chips: ['v0.2', 'MIT', 'ESM'],
@@ -282,39 +297,56 @@ export const COPY: Record<Lang, Copy> = {
       title: 'Do it properly, and this is where you stop',
       lead: (
         <>
-          <code>useSyncExternalStore</code> is React 18’s answer for reading external mutable
-          state. Press the button to see what happens when you point it at Cornerstone3D —{' '}
-          <b>it really runs, on this page.</b>
+          <b>Read the slice number and the total from the image, and show them.</b> That is the
+          whole ask. Four steps show why it doesn’t work without a library.
         </>
       ),
-      tabNaive: 'The obvious binding',
-      tabHook: 'useViewportState',
       naiveTitle: 'useSyncExternalStore',
       hookTitle: 'useViewportState',
       naiveBadge: 'by hand',
-      idle: 'Not mounted yet',
       run: 'Mount it',
       again: 'Again',
       crashed: 'The error React threw',
       loop: 'Infinite render loop — React aborted rendering',
       decode: 'What that code means',
+      probe: {
+        title: 'Nothing has changed. Read it twice in a row anyway:',
+        composed: 'return { slice, total }',
+        camera: 'return viewport.getCamera()',
+        snapshot: 'useViewportState twice in one component',
+        same: 'same object',
+        diff: 'different object',
+      },
+      captions: [
+        <>
+          <code>useSyncExternalStore</code> is <b>React 18’s answer for reading external state</b>{' '}
+          like an engine. The code on the right does exactly that, by the book. Nothing unusual
+          about it.
+        </>,
+        <>
+          But look at what <code>getSnapshot</code> hands back —{' '}
+          <b>a different object every call, with nothing having changed.</b> The object you
+          compose yourself and the one the engine getter returns behave the same way.
+        </>,
+        <>
+          <code>useSyncExternalStore</code> compares with <code>Object.is</code> and nothing
+          else. A new reference every time reads as{' '}
+          <b>“changed again”, so it renders again — forever.</b> Press it and watch. Without an
+          error boundary this takes the whole page down.
+        </>,
+        <>
+          The hook rebuilds its snapshot only when an engine event arrives, and hands back{' '}
+          <b>the same reference</b> in between. So it settles. And that snapshot is{' '}
+          <b>one per viewport, shared</b> — which is why a widget cannot make it for itself.
+        </>,
+      ],
       verdict: (
         <>
-          <b>Cornerstone3D getters return a fresh object on every call.</b>{' '}
-          <code>useSyncExternalStore</code> compares what <code>getSnapshot</code> returns with{' '}
-          <code>Object.is</code>, so a new reference every time never settles.
-          <br />
-          <br />
-          Read one field as a number and it happens to work — that is why the hook example in
-          panel 1 calls <code>useViewportState</code> twice. Bundle two values into an object and
-          you hit the wall. The only way out is to abandon{' '}
-          <code>useSyncExternalStore</code> for <code>useEffect + setState</code>, and{' '}
-          <b>that is precisely the path where tearing appears.</b>
-          <br />
-          <br />
-          This wall cannot be climbed from inside a widget: the snapshot has to be{' '}
-          <b>shared</b> by every consumer of a viewport for the reference to be stable. That is
-          why it has to live centrally.
+          <b>This wall cannot be climbed from inside a widget.</b> For the reference to be
+          stable, every consumer of a viewport has to share one snapshot, and that can only live
+          centrally. The only way around it is to give up{' '}
+          <code>useSyncExternalStore</code> for <code>useEffect + setState</code> — which is
+          precisely the path where tearing appears.
         </>
       ),
     },
@@ -331,9 +363,6 @@ export const COPY: Record<Lang, Copy> = {
       imageLabel: 'Image',
       imageOff: 'No image yet',
       notMounted: 'Not on screen yet',
-      preparing: 'Setting up…',
-      next: 'Next →',
-      restart: 'Start over',
       stories: [
         {
           tab: 'The image arrives after the screen',
