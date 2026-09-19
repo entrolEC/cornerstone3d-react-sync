@@ -9,7 +9,7 @@ import naiveSource from './naive.tsx?raw';
 
 const VIEWPORT_ID = 'demo-wall';
 const NAIVE_SOURCE = naiveSource.trim();
-const STEPS = 4;
+const STEPS = 5;
 
 // A production React build ships error #185 as a bare code, so the page says
 // what failed in words and links React's own page for it.
@@ -35,8 +35,9 @@ export function Breakdown({ imageIds, theme }: { imageIds: string[]; theme: 'lig
         </div>
         <div className="focus">
           {step === 0 && <Code theme={theme} title="demo/naive.tsx" code={NAIVE_SOURCE} />}
-          {step === 1 && <IdentityProbe viewportId={VIEWPORT_ID} />}
-          {step === 2 && (
+          {step === 1 && <RuleBox />}
+          {step === 2 && <IdentityProbe viewportId={VIEWPORT_ID} />}
+          {step === 3 && (
             <div className="card">
               <div className="card__head">
                 {t.naiveTitle} <span className="badge badge--bad">{t.naiveBadge}</span>
@@ -85,7 +86,7 @@ export function Breakdown({ imageIds, theme }: { imageIds: string[]; theme: 'lig
               </div>
             </div>
           )}
-          {step === 3 && (
+          {step === 4 && (
             <div className="focus__stack">
               <div className="card">
                 <div className="card__head">
@@ -117,8 +118,23 @@ export function Breakdown({ imageIds, theme }: { imageIds: string[]; theme: 'lig
   );
 }
 
+/** The rule that makes the next step mean something. */
+function RuleBox() {
+  const t = useCopy().panel2.rules;
+  return (
+    <div className="probe">
+      <p className="probe__title">{t.title}</p>
+      <ol className="rules">
+        {t.items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 /**
- * Reads the same thing twice in a row, with nothing in between, and reports
+ * Calls getSnapshot twice in a row with nothing in between, and reports
  * whether the two results are the same object. Both rows come back false:
  * one for an object we compose, one straight out of an engine getter.
  */
@@ -134,8 +150,16 @@ function IdentityProbe({ viewportId }: { viewportId: string }) {
   return (
     <div className="probe">
       <p className="probe__title">{t.title}</p>
-      <ProbeRow label={t.composed} same={Object.is(compose(), compose())} />
-      <ProbeRow label={t.camera} same={Object.is(viewport.getCamera(), viewport.getCamera())} />
+      <ProbeRow
+        what={t.composedWhat}
+        code={t.composed}
+        same={Object.is(compose(), compose())}
+      />
+      <ProbeRow
+        what={t.cameraWhat}
+        code={t.camera}
+        same={Object.is(viewport.getCamera(), viewport.getCamera())}
+      />
     </div>
   );
 }
@@ -148,17 +172,20 @@ function SnapshotProbe({ viewportId }: { viewportId: string }) {
 
   return (
     <div className="probe">
-      <p className="probe__title">{t.title}</p>
-      <ProbeRow label={t.snapshot} same={Object.is(first, second)} />
+      <p className="probe__title">{t.snapshotTitle}</p>
+      <ProbeRow what={t.snapshotWhat} code={t.snapshot} same={Object.is(first, second)} />
     </div>
   );
 }
 
-function ProbeRow({ label, same }: { label: string; same: boolean }) {
+function ProbeRow({ what, code, same }: { what: string; code: string; same: boolean }) {
   const t = useCopy().panel2.probe;
   return (
     <div className="probe__row">
-      <code className="probe__label">{label}</code>
+      <span className="probe__label">
+        {what}
+        <code>{code}</code>
+      </span>
       <span className="probe__result">
         <code>Object.is → {String(same)}</code>
         <span className={`badge badge--${same ? 'ok' : 'bad'}`}>{same ? t.same : t.diff}</span>

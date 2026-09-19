@@ -784,8 +784,29 @@ code {
   border-top: 1px solid var(--border);
 }
 .probe__label {
-  font-size: 0.8rem;
+  display: grid;
+  gap: 0.15rem;
+  font-size: 0.85rem;
   color: var(--text);
+}
+.probe__label code {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.rules {
+  margin: 0;
+  padding-left: 1.4rem;
+  display: grid;
+  gap: 0.55rem;
+  font-size: 0.9rem;
+}
+.rules li::marker {
+  color: var(--primary);
+  font-weight: 700;
+}
+.rules code {
+  font-size: 0.85em;
 }
 .probe__result {
   display: inline-flex;
