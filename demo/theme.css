@@ -296,7 +296,6 @@ h1, h2, h3 { line-height: 1.25; margin: 0 0 0.6rem; font-weight: 700; }
   display: grid;
   grid-template-columns: 18rem minmax(0, 1fr);
   gap: 1.5rem;
-  align-items: start;
 }
 @media (max-width: 760px) { .stage { grid-template-columns: minmax(0, 1fr); } }
 
@@ -307,6 +306,8 @@ h1, h2, h3 { line-height: 1.25; margin: 0 0 0.6rem; font-weight: 700; }
   color: var(--text-muted);
 }
 .stage__readouts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.stage__readouts .card { display: flex; flex-direction: column; }
+.stage__readouts .card__body { flex: 1; display: grid; place-items: center; }
 @media (max-width: 1000px) { .stage__readouts { grid-template-columns: minmax(0, 1fr); } }
 
 .steps {

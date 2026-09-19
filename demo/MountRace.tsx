@@ -182,13 +182,13 @@ export function MountRace({ imageIds }: { imageIds: string[] }) {
 
         <div className="stage__readouts">
           <Readout
-            title="useEffect로 직접 짠 표시기"
+            title="useEffect + addEventListener"
             lines={lineCount(BY_HAND_SOURCE)}
             tone="bad"
           >
             {readouts ? <SliceIndicatorByHand viewportId={VIEWPORT_ID} /> : null}
           </Readout>
-          <Readout title="useViewportState 표시기" lines={lineCount(HOOK_SOURCE)} tone="ok">
+          <Readout title="useViewportState" lines={lineCount(HOOK_SOURCE)} tone="ok">
             {readouts ? <SliceIndicator viewportId={VIEWPORT_ID} /> : null}
           </Readout>
         </div>
@@ -253,7 +253,7 @@ function Readout({
   return (
     <div className="card">
       <div className="card__head">
-        {title} <span className={`badge badge--${tone}`}>{lines}줄</span>
+        {title} <span className={`badge badge--${tone}`}>{lines} lines</span>
       </div>
       <div className="card__body" style={{ textAlign: 'center' }}>
         {children ?? <span className="ind ind--empty">아직 화면에 없음</span>}
