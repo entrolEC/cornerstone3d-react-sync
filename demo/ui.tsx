@@ -1,5 +1,59 @@
 import { Highlight, themes } from 'prism-react-renderer';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { COPY, type Copy, type Lang } from './copy';
+
+/* ---------------- language ---------------- */
+
+const LangContext = createContext<Copy>(COPY.ko);
+
+/** Every string on the page comes from here, so the two locales can't drift. */
+export const useCopy = () => useContext(LangContext);
+
+export function LangProvider({ lang, children }: { lang: Lang; children: ReactNode }) {
+  return <LangContext.Provider value={COPY[lang]}>{children}</LangContext.Provider>;
+}
+
+const readLang = (): Lang => {
+  try {
+    const stored = localStorage.getItem('lang');
+    if (stored === 'ko' || stored === 'en') return stored;
+  } catch {
+    /* private mode — fall through to the browser's preference */
+  }
+  return navigator.language.startsWith('ko') ? 'ko' : 'en';
+};
+
+export function useLang() {
+  const [lang, set] = useState<Lang>(readLang);
+
+  useEffect(() => {
+    document.documentElement.lang = COPY[lang].htmlLang;
+    try {
+      localStorage.setItem('lang', lang);
+    } catch {
+      /* the page still works; the choice just won't stick */
+    }
+  }, [lang]);
+
+  return [lang, set] as const;
+}
+
+export function LangSwitch({ lang, onChange }: { lang: Lang; onChange: (next: Lang) => void }) {
+  return (
+    <div className="langswitch" role="group" aria-label="Language">
+      {(['en', 'ko'] as const).map((candidate) => (
+        <button
+          key={candidate}
+          className="langswitch__option"
+          aria-pressed={candidate === lang}
+          onClick={() => onChange(candidate)}
+        >
+          {candidate.toUpperCase()}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 /* ---------------- theme ---------------- */
 
@@ -38,15 +92,8 @@ export function region(source: string, name: string): string {
   return match ? match[1] : `// region "${name}" not found`;
 }
 
-export function Code({
-  code,
-  title,
-  theme,
-}: {
-  code: string;
-  title: string;
-  theme: Theme;
-}) {
+export function Code({ code, title, theme }: { code: string; title: string; theme: Theme }) {
+  const t = useCopy().common;
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -66,7 +113,7 @@ export function Code({
             setCopied(true);
           }}
         >
-          {copied ? '복사됨' : '복사'}
+          {copied ? t.copied : t.copy}
         </button>
       </div>
       <Highlight
@@ -97,19 +144,23 @@ export function Panel({
   eyebrow,
   title,
   lead,
+  alt = false,
   children,
 }: {
   eyebrow: string;
   title: string;
   lead: ReactNode;
+  alt?: boolean;
   children: ReactNode;
 }) {
   return (
-    <section className="panel">
+    <section className={`panel${alt ? ' panel--alt' : ''}`}>
       <div className="wrap">
-        <div className="panel__eyebrow">{eyebrow}</div>
-        <h2 className="panel__title">{title}</h2>
-        <p className="panel__lead">{lead}</p>
+        <header className="panel__head">
+          <div className="panel__eyebrow">{eyebrow}</div>
+          <h2 className="panel__title">{title}</h2>
+          <p className="panel__lead">{lead}</p>
+        </header>
         {children}
       </div>
     </section>

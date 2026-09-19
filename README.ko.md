@@ -155,13 +155,13 @@ export function SliceIndicatorByHand({ viewportId }: { viewportId: string }) {
 
   useEffect(() => {
     const enabled = getEnabledElementByViewportId(viewportId);
-    if (!enabled) return; // 뷰포트가 아직 없으면? 나중에 켜져도 영영 구독하지 않는다
+    if (!enabled) return; // no viewport yet? then never, even once it exists
     const viewport = enabled.viewport as Types.IStackViewport;
     const { element } = viewport;
 
     const update = () =>
       setState({ slice: viewport.getSliceIndex(), total: viewport.getNumberOfSlices() });
-    update(); // 첫 렌더와 구독 사이의 틈 메우기 — 빼먹기 쉽다
+    update(); // patch the gap between first render and subscription — easy to forget
 
     element.addEventListener(Enums.Events.CAMERA_MODIFIED, update);
     element.addEventListener(Enums.Events.VOI_MODIFIED, update);
@@ -173,8 +173,12 @@ export function SliceIndicatorByHand({ viewportId }: { viewportId: string }) {
     };
   }, [viewportId]);
 
-  if (!state) return <span>—</span>;
-  return <span>{state.slice + 1} / {state.total}</span>;
+  if (!state) return <span className="ind ind--empty">—</span>;
+  return (
+    <span className="ind">
+      {state.slice + 1} / {state.total}
+    </span>
+  );
 }
 ```
 

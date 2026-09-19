@@ -173,8 +173,12 @@ export function SliceIndicatorByHand({ viewportId }: { viewportId: string }) {
     };
   }, [viewportId]);
 
-  if (!state) return <span>—</span>;
-  return <span>{state.slice + 1} / {state.total}</span>;
+  if (!state) return <span className="ind ind--empty">—</span>;
+  return (
+    <span className="ind">
+      {state.slice + 1} / {state.total}
+    </span>
+  );
 }
 ```
 

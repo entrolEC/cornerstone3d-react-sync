@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { getEnabledElementByViewportId, type Types } from '@cornerstonejs/core';
-import { Panel } from './ui';
+import { Panel, useCopy } from './ui';
 import { CtViewport } from './CtViewport';
 import {
   BY_HAND_SOURCE,
@@ -12,148 +12,59 @@ import {
 
 const VIEWPORT_ID = 'demo-race';
 
-interface Step {
-  /** 영상이 화면에 붙어 있는지 */
+/** What is on screen at each step. The order is the whole point. */
+interface Stage {
   image: boolean;
-  /** 표시기 두 개가 화면에 있는지 */
   readouts: boolean;
-  /** 이 단계에서 슬라이스를 자동으로 넘겨본다 */
+  /** Page through slices during this step. */
   scroll?: boolean;
-  caption: ReactNode;
 }
 
-interface Story {
-  tab: string;
-  intro: ReactNode;
-  /** 표시기보다 먼저 영상이 있어야 하는 이야기인지 — 순서가 전부다. */
-  imageFirst: boolean;
-  steps: Step[];
-  verdict: ReactNode;
-}
-
-const STORIES: Story[] = [
-  {
-    tab: '영상이 화면보다 늦게 온다',
-    intro: (
-      <>
-        환자 목록에서 검사를 엽니다. 뷰어 화면은 바로 그려지고, 영상은 서버에서 받아온 뒤에
-        붙습니다. React 앱에서 가장 흔한 순서입니다.
-      </>
-    ),
-    imageFirst: false,
-    steps: [
-      {
-        image: false,
-        readouts: true,
-        caption: (
-          <>
-            뷰어 화면이 먼저 열렸습니다. <b>슬라이스 표시기 두 개도 이때 같이 만들어졌고</b>,
-            아직 읽을 영상이 없으니 둘 다 비어 있습니다.
-          </>
-        ),
-      },
-      {
-        image: true,
-        readouts: true,
-        caption: (
-          <>
-            영상이 도착해 화면에 붙었습니다. <b>useViewportState 쪽은 바로 숫자가 찼습니다.</b>{' '}
-            직접 짠 쪽은 그대로 비어 있습니다.
-          </>
-        ),
-      },
-      {
-        image: true,
-        readouts: true,
-        scroll: true,
-        caption: (
-          <>
-            슬라이스를 넘겨봅니다. 직접 짠 쪽은 <b>끝까지 비어 있습니다</b> — 만들어질 때 영상이
-            없어서 구독을 포기했고, 다시 시도할 계기가 없기 때문입니다.
-          </>
-        ),
-      },
-    ],
-    verdict: (
-      <>
-        이게 <code>useEffect</code> + <code>addEventListener</code> 조합이 놓치는 첫 번째
-        지점입니다. "영상이 아직 없다"를 한 번만 확인하고 끝내니까요. 훅은 영상이 등록되는 순간을
-        계속 듣고 있다가 알아서 채웁니다.
-      </>
-    ),
-  },
-  {
-    tab: '보던 검사를 닫는다',
-    intro: <>이번엔 반대 순서입니다. 영상이 이미 떠 있는 화면에서 시작해, 사용자가 검사를 닫습니다.</>,
-    imageFirst: true,
-    steps: [
-      {
-        image: true,
-        readouts: true,
-        caption: (
-          <>
-            영상이 이미 떠 있는 상태에서 표시기가 만들어졌습니다. 이 순서에서는{' '}
-            <b>둘 다 정상으로 동작합니다.</b>
-          </>
-        ),
-      },
-      {
-        image: false,
-        readouts: true,
-        caption: (
-          <>
-            검사를 닫았습니다. 영상은 사라졌는데 <b>직접 짠 쪽은 방금 전 숫자를 그대로 붙잡고
-            있습니다</b> — 존재하지 않는 영상의 슬라이스 번호입니다.
-          </>
-        ),
-      },
-    ],
-    verdict: (
-      <>
-        훅은 <code>—</code>로 비웁니다. 영상이 없는 상태는 오류가 아니라 정상 상태이고, 훅이 그걸{' '}
-        <code>undefined</code>로 돌려주기 때문입니다.
-      </>
-    ),
-  },
+/** Mechanics only — every word lives in copy.tsx, indexed the same way. */
+const STAGES: Stage[][] = [
+  [
+    { image: false, readouts: true },
+    { image: true, readouts: true },
+    { image: true, readouts: true, scroll: true },
+  ],
+  [
+    { image: true, readouts: true },
+    { image: false, readouts: true },
+  ],
 ];
 
+/** Whether the image must already exist before the readouts appear. */
+const IMAGE_FIRST = [false, true];
+
 export function MountRace({ imageIds }: { imageIds: string[] }) {
+  const t = useCopy().panel2;
   const [storyIndex, setStoryIndex] = useState(0);
-  // -1 = 이야기 시작 전. 표시기는 아직 없고, 영상만 이야기가 요구하는 상태로 둔다.
+  // -1 = before the story starts: no readouts yet, image only where the story needs it.
   const [stepIndex, setStepIndex] = useState(-1);
   const [run, setRun] = useState(0);
 
-  const story = STORIES[storyIndex];
-  const step = story.steps[stepIndex];
-  const done = stepIndex === story.steps.length - 1;
+  const stages = STAGES[storyIndex];
+  const story = t.stories[storyIndex];
+  const stage = stages[stepIndex];
+  const done = stepIndex === stages.length - 1;
 
-  const image = step ? step.image : story.imageFirst;
-  const readouts = step?.readouts ?? false;
+  const image = stage ? stage.image : IMAGE_FIRST[storyIndex];
+  const readouts = stage?.readouts ?? false;
 
-  // 탭을 바꾸면 영상만 먼저 제자리에 두고, 한 박자 뒤 첫 걸음에서 표시기를 만든다.
-  // 이 한 박자가 이야기의 전부다 — 둘 중 무엇이 먼저 존재했는가.
+  // Switching stories puts the image in place first, then creates the readouts a
+  // beat later. That beat is the entire experiment: which one existed first.
   useEffect(() => {
     setStepIndex(-1);
     const id = setTimeout(() => setStepIndex(0), 450);
     return () => clearTimeout(id);
   }, [storyIndex, run]);
 
-  useAutoScroll(step?.scroll === true && image);
+  useAutoScroll(stage?.scroll === true && image);
 
   return (
-    <Panel
-      eyebrow="패널 2"
-      title="줄 수가 아니라, 남아있는 버그가 문제입니다"
-      lead={
-        <>
-          아래 표시기 두 개는 <b>패널 1과 똑같은 코드</b>입니다. 영상과 표시기 중 무엇이 먼저
-          생기느냐에 따라 결과가 갈립니다 — 그리고 그 순서는 앱이 정하는 게 아니라, 네트워크와
-          사용자가 정합니다.
-        </>
-      }
-    >
-      <div className="tabs" style={{ marginBottom: '1.25rem' }} role="tablist">
-        {STORIES.map((candidate, index) => (
+    <Panel eyebrow={t.eyebrow} title={t.title} lead={t.lead} alt>
+      <div className="tabs tabs--spaced" role="tablist">
+        {t.stories.map((candidate, index) => (
           <button
             key={candidate.tab}
             className="tab"
@@ -161,66 +72,56 @@ export function MountRace({ imageIds }: { imageIds: string[] }) {
             aria-selected={index === storyIndex}
             onClick={() => setStoryIndex(index)}
           >
-            상황 {index + 1}. {candidate.tab}
+            {index + 1}. {candidate.tab}
           </button>
         ))}
       </div>
 
-      <p className="panel__lead" style={{ marginBottom: '1.25rem' }}>
-        {story.intro}
-      </p>
+      <p className="story__intro">{story.intro}</p>
 
       <div className="stage">
         <div className="stage__image">
           {image ? (
             <CtViewport viewportId={VIEWPORT_ID} imageIds={imageIds} showOverlay={false} />
           ) : (
-            <div className="vp vp--off">아직 영상이 없음</div>
+            <div className="vp vp--off">{t.imageOff}</div>
           )}
-          <div className="stage__label">영상</div>
+          <div className="stage__label">{t.imageLabel}</div>
         </div>
 
         <div className="stage__readouts">
-          <Readout
-            title="useEffect + addEventListener"
-            lines={lineCount(BY_HAND_SOURCE)}
-            tone="bad"
-          >
-            {readouts ? <SliceIndicatorByHand viewportId={VIEWPORT_ID} /> : null}
+          <Readout title="useEffect + addEventListener" lines={lineCount(BY_HAND_SOURCE)} tone="bad">
+            {readouts ? <SliceIndicatorByHand viewportId={VIEWPORT_ID} /> : t.notMounted}
           </Readout>
           <Readout title="useViewportState" lines={lineCount(HOOK_SOURCE)} tone="ok">
-            {readouts ? <SliceIndicator viewportId={VIEWPORT_ID} /> : null}
+            {readouts ? <SliceIndicator viewportId={VIEWPORT_ID} /> : t.notMounted}
           </Readout>
         </div>
       </div>
 
       <div className="steps">
-        <div className="steps__dots">
-          {story.steps.map((_, index) => (
-            <span
-              key={index}
-              className={`dot ${index <= stepIndex ? 'dot--on' : ''}`}
-              aria-hidden
-            />
+        <div className="steps__dots" aria-hidden>
+          {stages.map((_, index) => (
+            <span key={index} className={`dot ${index <= stepIndex ? 'dot--on' : ''}`} />
           ))}
         </div>
         <p className="steps__caption">
-          {step ? (
+          {stage ? (
             <>
-              <b>{stepIndex + 1}.</b> {step.caption}
+              <b>{stepIndex + 1}.</b> {story.captions[stepIndex]}
             </>
           ) : (
-            '준비 중…'
+            t.preparing
           )}
         </p>
         <div className="steps__buttons">
           {!done && (
             <button
               className="button button--primary button--sm"
-              disabled={!step}
+              disabled={!stage}
               onClick={() => setStepIndex((index) => index + 1)}
             >
-              다음 →
+              {t.next}
             </button>
           )}
           {stepIndex > 0 && (
@@ -228,7 +129,7 @@ export function MountRace({ imageIds }: { imageIds: string[] }) {
               className="button button--secondary button--sm"
               onClick={() => setRun((count) => count + 1)}
             >
-              처음부터
+              {t.restart}
             </button>
           )}
         </div>
@@ -255,18 +156,15 @@ function Readout({
       <div className="card__head">
         {title} <span className={`badge badge--${tone}`}>{lines} lines</span>
       </div>
-      <div className="card__body" style={{ textAlign: 'center' }}>
-        {children ?? <span className="ind ind--empty">아직 화면에 없음</span>}
+      <div className="card__body card__body--center">
+        {typeof children === 'string' ? <span className="ind ind--empty">{children}</span> : children}
       </div>
     </div>
   );
 }
 
-/** 마지막 단계에서 슬라이스를 천천히 넘겨, 표시기가 따라오는지 보여준다. */
+/** Pages through slices on the last step, so the readouts can be seen following. */
 function useAutoScroll(active: boolean) {
-  const ref = useRef(active);
-  ref.current = active;
-
   useEffect(() => {
     if (!active) return;
     const id = setInterval(() => {
@@ -274,8 +172,7 @@ function useAutoScroll(active: boolean) {
         | Types.IStackViewport
         | undefined;
       if (!viewport) return;
-      const next = (viewport.getSliceIndex() + 1) % viewport.getNumberOfSlices();
-      void viewport.setImageIdIndex(next);
+      void viewport.setImageIdIndex((viewport.getSliceIndex() + 1) % viewport.getNumberOfSlices());
     }, 700);
     return () => clearInterval(id);
   }, [active]);

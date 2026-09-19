@@ -63,7 +63,6 @@ export function CtViewport({
         renderingEngineId={renderingEngineId}
         style={{ width: '100%', height: '100%' }}
       />
-      {showOverlay && <div className="vp__hint">스크롤로 슬라이스 이동</div>}
       {showOverlay && <Overlay viewportId={viewportId} />}
     </div>
   );

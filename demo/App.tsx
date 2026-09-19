@@ -3,14 +3,27 @@ import { useEffect, useState } from 'react';
 import { setup, renderingEngineId } from './cornerstone';
 import { Hero } from './Hero';
 import { MountRace } from './MountRace';
-import { useTheme } from './ui';
+import { LangProvider, LangSwitch, useCopy, useLang, useTheme } from './ui';
 
 const REPO = 'https://github.com/entrolEC/react-cornerstone3d';
+const NPM = 'https://www.npmjs.com/package/react-cornerstone3d';
+const INSTALL = 'npm install react-cornerstone3d';
 
 export function App() {
+  const [lang, setLang] = useLang();
+  return (
+    <LangProvider lang={lang}>
+      <Page lang={lang} onLang={setLang} />
+    </LangProvider>
+  );
+}
+
+function Page({ lang, onLang }: { lang: 'ko' | 'en'; onLang: (next: 'ko' | 'en') => void }) {
+  const t = useCopy();
   const { theme, toggle } = useTheme();
   const [imageIds, setImageIds] = useState<string[]>();
   const [error, setError] = useState<string>();
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     setup().then(setImageIds, (cause: Error) => setError(cause.message));
@@ -22,25 +35,31 @@ export function App() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
+  useEffect(() => {
+    if (!copied) return;
+    const id = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(id);
+  }, [copied]);
+
   return (
     <>
       <nav className="navbar">
-        <div className="wrap">
+        <div className="wrap navbar__inner">
           <a className="navbar__brand" href={REPO}>
             react-cornerstone3d
           </a>
-          <span className="navbar__version">v0.2</span>
           <span className="navbar__spacer" />
           <a className="navbar__link" href="https://www.cornerstonejs.org/">
             Cornerstone3D
           </a>
-          <a className="navbar__link" href="https://www.npmjs.com/package/react-cornerstone3d">
+          <a className="navbar__link" href={NPM}>
             npm
           </a>
           <a className="navbar__link" href={REPO}>
             GitHub
           </a>
-          <button className="navbar__toggle" onClick={toggle} aria-label="테마 전환">
+          <LangSwitch lang={lang} onChange={onLang} />
+          <button className="iconbutton" onClick={toggle} aria-label={t.nav.theme}>
             {theme === 'dark' ? '☀' : '☾'}
           </button>
         </div>
@@ -48,23 +67,33 @@ export function App() {
 
       <header className="hero">
         <div className="wrap">
-          <h1>Cornerstone3D의 엔진 상태를, React 상태로</h1>
-          <p>
-            뷰포트 상태를 읽는 <code>useSyncExternalStore</code> 바인딩. tearing 없이, Provider
-            없이, 여러분의 엔진 관리 방식은 그대로 둔 채로.
-          </p>
-          <div className="install">
-            npm install react-cornerstone3d
-            <button onClick={() => void navigator.clipboard.writeText('npm install react-cornerstone3d')}>
-              복사
-            </button>
+          <div className="hero__chips">
+            {t.hero.chips.map((chip) => (
+              <span key={chip} className="chip">
+                {chip}
+              </span>
+            ))}
           </div>
+          <h1>{t.hero.title}</h1>
+          <p className="hero__sub">{t.hero.sub}</p>
+
+          <button
+            className="install"
+            onClick={() => {
+              void navigator.clipboard.writeText(INSTALL);
+              setCopied(true);
+            }}
+          >
+            <code>{INSTALL}</code>
+            <span className="install__action">{copied ? t.common.copied : t.common.copy}</span>
+          </button>
+
           <div className="hero__buttons">
             <a className="button button--primary" href="#demo">
-              데모 보기
+              {t.hero.demo}
             </a>
             <a className="button button--secondary" href={REPO}>
-              GitHub
+              {t.hero.github}
             </a>
           </div>
         </div>
@@ -72,11 +101,15 @@ export function App() {
 
       <main id="demo">
         {error && (
-          <div className="loading">
-            DICOM 데이터를 불러오지 못했습니다 — {error}
+          <div className="notice">
+            {t.failed} — {error}
           </div>
         )}
-        {!error && !imageIds && <div className="loading">CT 시리즈를 불러오는 중…</div>}
+        {!error && !imageIds && (
+          <div className="notice">
+            <span className="spinner" aria-hidden /> {t.loading}
+          </div>
+        )}
         {imageIds && (
           <>
             <Hero imageIds={imageIds} theme={theme} />
@@ -87,10 +120,12 @@ export function App() {
 
       <footer className="footer">
         <div className="wrap">
-          MIT · <a href={REPO}>GitHub</a> ·{' '}
-          <a href="https://www.npmjs.com/package/react-cornerstone3d">npm</a>
-          <br />
-          영상 데이터는 Cornerstone3D 공식 예제가 사용하는 공개 CT 시리즈입니다.
+          <div className="footer__links">
+            <a href={REPO}>GitHub</a>
+            <a href={NPM}>npm</a>
+            <a href={`${REPO}/blob/main/LICENSE`}>MIT</a>
+          </div>
+          <p>{t.footer}</p>
         </div>
       </footer>
     </>
