@@ -584,7 +584,10 @@ code {
 }
 .note strong {
   display: block;
-  margin-bottom: 0.15rem;
+  margin-bottom: 0.3rem;
+}
+.note p + p {
+  margin-top: 0.7rem;
 }
 
 .verdict {

@@ -38,6 +38,16 @@ export interface Copy {
     eyebrow: string;
     title: string;
     lead: ReactNode;
+    cardTitle: string;
+    cardBadge: string;
+    rules: { title: string; items: string[] };
+    captions: ReactNode[];
+    verdict: ReactNode;
+  };
+  panel3: {
+    eyebrow: string;
+    title: string;
+    lead: ReactNode;
     naiveTitle: string;
     hookTitle: string;
     naiveBadge: string;
@@ -46,7 +56,6 @@ export interface Copy {
     crashed: string;
     loop: string;
     decode: string;
-    rules: { title: string; items: string[] };
     probe: {
       title: string;
       snapshotTitle: string;
@@ -62,7 +71,7 @@ export interface Copy {
     captions: ReactNode[];
     verdict: ReactNode;
   };
-  panel3: {
+  panel4: {
     eyebrow: string;
     title: string;
     lead: ReactNode;
@@ -73,8 +82,6 @@ export interface Copy {
   };
   footer: ReactNode;
 }
-
-const DEMO_NOTE_LINES = 33;
 
 export const COPY: Record<Lang, Copy> = {
   ko: {
@@ -113,22 +120,73 @@ export const COPY: Record<Lang, Copy> = {
       note: (
         <>
           <strong>오른쪽 코드는 지어낸 게 아닙니다.</strong>
-          이 페이지가 실제로 import해서 렌더링하는 파일(<code>demo/widgets.tsx</code>)에서 그대로
-          뽑아옵니다. 그리고 직접 배선한 쪽은 Cornerstone3D + React 프로젝트가 위젯마다 반복해서
-          쓰는 바로 그 패턴입니다. 그런데 <code>useEffect</code> 말고, React 18에는{' '}
-          <b>이런 일을 위해 만든 공식 훅이 따로 있습니다.</b> 그걸 쓰면 되지 않을까요? 다음
-          패널에서 씁니다. ↓
+          <p>
+            이 페이지가 실제로 import해서 렌더링하는 파일(<code>demo/widgets.tsx</code>)에서 그대로
+            뽑아옵니다. 직접 배선한 쪽은 Cornerstone3D + React 프로젝트가 위젯마다 반복해서 쓰는
+            바로 그 패턴입니다.
+          </p>
+          <p>
+            그런데 줄 수는 문제의 작은 쪽입니다. 저 코드가 하는 일은 결국{' '}
+            <b>엔진이 이미 갖고 있는 상태를 <code>setState</code>로 한 벌 더 복사해 두는 것</b>
+            입니다. 사본은 늦게 도착하고, 오래되고, 옆 위젯의 사본과 어긋납니다. React 18이{' '}
+            <code>useSyncExternalStore</code>를 추가한 이유가 정확히 이겁니다 —{' '}
+            <b>외부 상태는 복사하지 말고 구독해서 읽으라</b>는 것. 그럼 그걸 쓰면 되지 않을까요?
+            다음 패널에서 씁니다. ↓
+          </p>
         </>
       ),
     },
     panel2: {
       eyebrow: '패널 2',
-      title: '정석대로 해도, 여기서 막힙니다',
+      title: 'React가 준비해 둔 정답으로 다시 짜봅니다',
       lead: (
         <>
-          패널 1의 33줄은 <code>useEffect + setState</code>였습니다. 그런데 React 18에는{' '}
-          <b>바로 이런 일을 하라고 만든 공식 훅</b>이 따로 있습니다 —{' '}
-          <code>useSyncExternalStore</code>. 그걸 쓰면 되지 않을까요? 다섯 걸음이면 답이 나옵니다.
+          패널 1의 코드는 엔진이 이미 갖고 있는 상태를 React state로 복사했습니다. React 18에는
+          복사하지 않고 <b>구독해서 그때그때 읽는</b> 공식 훅이 따로 있습니다 —{' '}
+          <code>useSyncExternalStore</code>. 그게 어떻게 생긴 물건인지부터 봅니다.
+        </>
+      ),
+      cardTitle: 'useSyncExternalStore',
+      cardBadge: '직접',
+      rules: {
+        title: 'React가 getSnapshot 을 쓰는 방법',
+        items: [
+          '렌더할 때마다 getSnapshot() 을 호출한다',
+          '지난번에 받은 값과 Object.is 로 비교한다',
+          '다르면 상태가 바뀐 것으로 보고 다시 렌더한다',
+        ],
+      },
+      captions: [
+        <>
+          인자는 두 개입니다. 첫째는 <b>구독 함수</b> — 값이 바뀌면 React에게 알려줄 방법을
+          등록합니다. 둘째가 <b><code>getSnapshot</code></b> — React가 <i>"지금 값 줘"</i> 하고
+          부를 때 실행되는 함수입니다. 여기서는 슬라이스 번호 <b>하나만</b> 돌려줍니다.
+        </>,
+        <>
+          React는 그 <code>getSnapshot</code>을 이렇게 씁니다. 지금은 <b>3번</b>만 기억해
+          두세요 — 비교가 <code>Object.is</code>라는 것.
+        </>,
+        <>
+          그리고 <b>실제로 잘 동작합니다.</b> 영상이 넘어갈 때마다 숫자가 따라옵니다.{' '}
+          <code>setState</code> 사본도 없고, 첫 렌더와 구독 사이의 틈을 메우는 코드도 필요
+          없습니다. <b>여기까지는 라이브러리가 필요 없습니다.</b>
+        </>,
+      ],
+      verdict: (
+        <>
+          이게 정답입니다. Cornerstone3D 상태를 React로 읽는 가장 바른 방법이고, 이 라이브러리도
+          속에서는 정확히 이걸 씁니다. — 그런데 <b>값 하나로 끝나는 화면은 없습니다.</b>
+        </>
+      ),
+    },
+    panel3: {
+      eyebrow: '패널 3',
+      title: '값이 둘이 되는 순간, 막힙니다',
+      lead: (
+        <>
+          슬라이스 번호만 띄우는 화면은 없습니다. 보통 <code>68 / 135</code>처럼 전체 장수도
+          같이 보여주죠. 값이 둘이 되면 <code>getSnapshot</code>은 <b>객체</b>를 돌려줘야
+          합니다. 딱 그 지점에서 막힙니다.
         </>
       ),
       naiveTitle: 'useSyncExternalStore',
@@ -139,17 +197,9 @@ export const COPY: Record<Lang, Copy> = {
       crashed: 'React가 던진 에러',
       loop: '무한 렌더 루프 — React가 렌더링을 중단했습니다',
       decode: '에러 코드 해설',
-      rules: {
-        title: 'React가 getSnapshot 을 쓰는 방법',
-        items: [
-          '렌더할 때마다 getSnapshot() 을 호출한다',
-          '지난번에 받은 값과 Object.is 로 비교한다',
-          '다르면 상태가 바뀐 것으로 보고 다시 렌더한다',
-        ],
-      },
       probe: {
         title: '화면에서 아무 일도 일어나지 않은 동안, getSnapshot 을 두 번 호출했습니다',
-        snapshotTitle: '3번과 똑같은 실험, 이번엔 훅으로',
+        snapshotTitle: '2번과 똑같은 실험, 이번엔 훅으로',
         composedWhat: '내가 만든 객체를 반환할 때',
         composed: 'return { slice, total }',
         cameraWhat: '엔진이 준 객체를 그대로 반환할 때',
@@ -161,30 +211,23 @@ export const COPY: Record<Lang, Copy> = {
       },
       captions: [
         <>
-          <code>useSyncExternalStore</code>는 <b>React 밖에서 바뀌는 값을 React에 연결하라고</b>{' '}
-          React 18이 추가한 공식 훅입니다. 이 라이브러리도 속에서는 이걸 씁니다. 오른쪽 코드에서{' '}
-          <b>두 번째 인자로 넘긴 함수</b>가 핵심이고, 그 함수의 이름이 <code>getSnapshot</code>
-          입니다 — React가 <i>"지금 값 줘"</i> 하고 부를 때 실행되는 함수입니다.
+          패널 2의 코드에서 <b>바뀐 곳은 한 군데</b>입니다 — <code>getSnapshot</code>이 숫자
+          대신 <code>{'{ slice, total }'}</code> 객체를 돌려줍니다. 누구라도 이렇게 씁니다.
         </>,
         <>
-          React는 그 <code>getSnapshot</code>을 이렇게 씁니다. 중요한 건 <b>3번</b>입니다 —
-          비교가 <code>Object.is</code>라는 것, 즉 <b>값이 같은지가 아니라 같은 객체인지</b>만
-          본다는 뜻입니다.
+          그런데 <code>getSnapshot</code>을 연달아 두 번 불러보면, 그 사이{' '}
+          <b>화면에서는 아무 일도 없었는데</b> 매번 다른 객체가 나옵니다. 내가 만들어 반환하든,
+          엔진이 준 걸 그대로 반환하든 똑같습니다.
         </>,
         <>
-          그래서 <code>getSnapshot</code>을 직접 두 번 불러봤습니다. 그 사이 화면에서는{' '}
-          <b>아무 일도 일어나지 않았습니다.</b> 그런데도 매번 다른 객체가 나옵니다 — 내가 만들어
-          반환하든, 엔진이 준 걸 그대로 반환하든 똑같습니다.
+          패널 2의 <b>3번 규칙</b>을 떠올려 보세요 — 비교가 <code>Object.is</code>입니다. 객체가
+          매번 다르니 React는 <b>매번 상태가 바뀐 것</b>으로 봅니다. 그래서 다시 렌더하고, 또
+          부르고, 또 다른 객체를 받고… 눌러서 확인해 보세요. 에러 경계가 없으면 페이지 전체가
+          죽습니다.
         </>,
         <>
-          React 입장에서는 <b>매번 상태가 바뀐 것</b>입니다. 그래서 다시 렌더하고, 또{' '}
-          <code>getSnapshot</code>을 부르고, 또 다른 객체를 받고… 눌러서 직접 확인해 보세요.
-          에러 경계가 없으면 페이지 전체가 죽습니다.
-        </>,
-        <>
-          훅은 엔진 이벤트가 올 때만 스냅샷을 새로 만들고, 그 사이에는{' '}
-          <b>같은 객체를 그대로 돌려줍니다.</b> 그래서 React가 정착합니다. 그리고 이 스냅샷은{' '}
-          <b>뷰포트당 하나로 공유</b>됩니다 — 위젯이 혼자서는 만들 수 없는 이유입니다.
+          <code>useViewportState</code>는 엔진 이벤트가 올 때만 스냅샷을 새로 만들고, 그 사이에는{' '}
+          <b>같은 객체를 그대로 돌려줍니다.</b> 2번과 똑같은 실험인데 결과가 반대입니다.
         </>,
       ],
       verdict: (
@@ -197,8 +240,8 @@ export const COPY: Record<Lang, Copy> = {
         </>
       ),
     },
-    panel3: {
-      eyebrow: '패널 3',
+    panel4: {
+      eyebrow: '패널 4',
       title: '줄 수가 아니라, 남아있는 버그가 문제입니다',
       lead: (
         <>
@@ -310,22 +353,76 @@ export const COPY: Record<Lang, Copy> = {
       note: (
         <>
           <strong>The code on the right isn’t an illustration.</strong>
-          It is pulled from the file this page actually imports and renders
-          (<code>demo/widgets.tsx</code>). And the hand-rolled side is the very pattern every
-          Cornerstone3D + React project repeats per widget. But <code>useEffect</code> isn’t the
-          only option: React 18 ships <b>an official hook made for this job</b>. So why not just
-          use that? The next panel does. ↓
+          <p>
+            It is pulled from the file this page actually imports and renders
+            (<code>demo/widgets.tsx</code>), and the hand-rolled side is the very pattern every
+            Cornerstone3D + React project repeats per widget.
+          </p>
+          <p>
+            But the line count is the smaller half of the problem. What that code does is{' '}
+            <b>keep a second copy of state the engine already owns</b>, pushed across by{' '}
+            <code>setState</code>. Copies arrive late, go stale, and disagree with the copy in
+            the widget next to them. That is exactly why React 18 added{' '}
+            <code>useSyncExternalStore</code> — <b>don’t copy external state, subscribe and read
+            it</b>. So why not just use that? The next panel does. ↓
+          </p>
         </>
       ),
     },
     panel2: {
       eyebrow: 'Panel 2',
-      title: 'Do it properly, and this is where you stop',
+      title: 'Rewrite it with the answer React already ships',
       lead: (
         <>
-          Those 33 lines in panel 1 were <code>useEffect + setState</code>. But React 18 ships{' '}
-          <b>an official hook made for exactly this job</b> — <code>useSyncExternalStore</code>.
-          So why not just use it? Five steps give the answer.
+          The code in panel 1 copied state the engine already owns into React state. React 18
+          ships an official hook that doesn’t copy it but{' '}
+          <b>subscribes and reads it on demand</b> — <code>useSyncExternalStore</code>. Let’s see
+          what it looks like first.
+        </>
+      ),
+      cardTitle: 'useSyncExternalStore',
+      cardBadge: 'by hand',
+      rules: {
+        title: 'How React uses getSnapshot',
+        items: [
+          'Call getSnapshot() on every render',
+          'Compare the result with the previous one using Object.is',
+          'If they differ, treat the state as changed and render again',
+        ],
+      },
+      captions: [
+        <>
+          It takes two arguments. The first is a <b>subscribe function</b> — it registers how
+          React gets told the value changed. The second is{' '}
+          <b><code>getSnapshot</code></b> — what React calls when it wants{' '}
+          <i>“the value, now”</i>. Here it returns <b>one thing</b>: the slice number.
+        </>,
+        <>
+          Here is how React uses that <code>getSnapshot</code>. For now just remember{' '}
+          <b>line 3</b> — the comparison is <code>Object.is</code>.
+        </>,
+        <>
+          And <b>it works.</b> The number follows every time the image moves. No{' '}
+          <code>setState</code> copy, and nothing to patch the gap between first render and
+          subscription. <b>No library needed so far.</b>
+        </>,
+      ],
+      verdict: (
+        <>
+          This is the right answer. It is the correct way to read Cornerstone3D state from
+          React, and this library uses exactly this underneath. — Except that{' '}
+          <b>no real screen needs only one value.</b>
+        </>
+      ),
+    },
+    panel3: {
+      eyebrow: 'Panel 3',
+      title: 'The moment there are two values',
+      lead: (
+        <>
+          No screen shows just a slice number. It usually shows <code>68 / 135</code> — the
+          total as well. Two values mean <code>getSnapshot</code> has to hand back an{' '}
+          <b>object</b>. That is where it stops.
         </>
       ),
       naiveTitle: 'useSyncExternalStore',
@@ -336,17 +433,9 @@ export const COPY: Record<Lang, Copy> = {
       crashed: 'The error React threw',
       loop: 'Infinite render loop — React aborted rendering',
       decode: 'What that code means',
-      rules: {
-        title: 'How React uses getSnapshot',
-        items: [
-          'Call getSnapshot() on every render',
-          'Compare the result with the previous one using Object.is',
-          'If they differ, treat the state as changed and render again',
-        ],
-      },
       probe: {
         title: 'Nothing happened on screen. getSnapshot was called twice anyway:',
-        snapshotTitle: 'The same experiment as step 3, now with the hook',
+        snapshotTitle: 'The same experiment as step 2, now with the hook',
         composedWhat: 'returning an object you build',
         composed: 'return { slice, total }',
         cameraWhat: 'returning what the engine gives you',
@@ -358,31 +447,25 @@ export const COPY: Record<Lang, Copy> = {
       },
       captions: [
         <>
-          <code>useSyncExternalStore</code> is the official hook React 18 added{' '}
-          <b>to connect values that change outside React to React</b>. This library uses it
-          underneath. The part that matters is{' '}
-          <b>the function passed as the second argument</b>, and that function has a name:{' '}
-          <code>getSnapshot</code> — what React calls when it wants <i>“the value, now”</i>.
+          Exactly <b>one thing changed</b> from panel 2’s code — <code>getSnapshot</code>{' '}
+          returns a <code>{'{ slice, total }'}</code> object instead of a number. Anyone would
+          write it this way.
         </>,
         <>
-          Here is how React uses that <code>getSnapshot</code>. <b>Line 3</b> is the one to
-          watch — the comparison is <code>Object.is</code>, which asks{' '}
-          <b>whether it is the same object</b>, not whether the values match.
+          But call <code>getSnapshot</code> twice in a row, with{' '}
+          <b>nothing happening on screen in between</b>, and a different object comes back each
+          time — whether you build the object yourself or hand back what the engine gave you.
         </>,
         <>
-          So <code>getSnapshot</code> was called twice, directly.{' '}
-          <b>Nothing happened on screen in between.</b> A different object came back both
-          times — whether you build the object yourself or hand back what the engine gave you.
+          Remember <b>line 3</b> from panel 2: the comparison is <code>Object.is</code>. A
+          different object every time reads as <b>the state changed every time</b>. So React
+          renders again, calls again, gets another object again… press it and watch. Without an
+          error boundary this takes the whole page down.
         </>,
         <>
-          As far as React is concerned, <b>the state changed every single time.</b> So it
-          renders again, calls <code>getSnapshot</code> again, gets another object again…
-          press it and watch. Without an error boundary this takes the whole page down.
-        </>,
-        <>
-          The hook rebuilds its snapshot only when an engine event arrives, and in between it{' '}
-          <b>hands back the very same object.</b> So React settles. And that snapshot is{' '}
-          <b>one per viewport, shared</b> — which is why a widget cannot make one for itself.
+          <code>useViewportState</code> rebuilds its snapshot only when an engine event arrives,
+          and in between it <b>hands back the very same object.</b> The same experiment as step
+          2, the opposite result.
         </>,
       ],
       verdict: (
@@ -395,8 +478,8 @@ export const COPY: Record<Lang, Copy> = {
         </>
       ),
     },
-    panel3: {
-      eyebrow: 'Panel 3',
+    panel4: {
+      eyebrow: 'Panel 4',
       title: 'It’s not the line count — it’s the bugs that survive it',
       lead: (
         <>

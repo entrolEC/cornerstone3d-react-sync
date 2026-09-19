@@ -100,3 +100,16 @@ export function SliceSlider({ viewportId }: { viewportId: string }) {
     />
   );
 }
+
+/** Pages through slices on a loop, so a readout can be seen following along. */
+export function useAutoScroll(viewportId: string, active: boolean) {
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(() => {
+      const viewport = stackOf(viewportId);
+      if (!viewport) return;
+      void viewport.setImageIdIndex((viewport.getSliceIndex() + 1) % viewport.getNumberOfSlices());
+    }, 700);
+    return () => clearInterval(id);
+  }, [viewportId, active]);
+}

@@ -1,7 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { getEnabledElementByViewportId, type Types } from '@cornerstonejs/core';
 import { Panel, Steps, useCopy } from './ui';
-import { CtViewport } from './CtViewport';
+import { CtViewport, useAutoScroll } from './CtViewport';
 import {
   BY_HAND_SOURCE,
   HOOK_SOURCE,
@@ -37,7 +36,7 @@ const STAGES: Stage[][] = [
 const IMAGE_FIRST = [false, true];
 
 export function MountRace({ imageIds }: { imageIds: string[] }) {
-  const t = useCopy().panel3;
+  const t = useCopy().panel4;
   const common = useCopy().common;
   const [storyIndex, setStoryIndex] = useState(0);
   // -1 = before the story starts: no readouts yet, image only where the story needs it.
@@ -60,10 +59,10 @@ export function MountRace({ imageIds }: { imageIds: string[] }) {
     return () => clearTimeout(id);
   }, [storyIndex, run]);
 
-  useAutoScroll(stage?.scroll === true && image);
+  useAutoScroll(VIEWPORT_ID, stage?.scroll === true && image);
 
   return (
-    <Panel eyebrow={t.eyebrow} title={t.title} lead={t.lead}>
+    <Panel eyebrow={t.eyebrow} title={t.title} lead={t.lead} alt>
       <div className="tabs tabs--spaced" role="tablist">
         {t.stories.map((candidate, index) => (
           <button
@@ -137,19 +136,4 @@ function Readout({
       </div>
     </div>
   );
-}
-
-/** Pages through slices on the last step, so the readouts can be seen following. */
-function useAutoScroll(active: boolean) {
-  useEffect(() => {
-    if (!active) return;
-    const id = setInterval(() => {
-      const viewport = getEnabledElementByViewportId(VIEWPORT_ID)?.viewport as
-        | Types.IStackViewport
-        | undefined;
-      if (!viewport) return;
-      void viewport.setImageIdIndex((viewport.getSliceIndex() + 1) % viewport.getNumberOfSlices());
-    }, 700);
-    return () => clearInterval(id);
-  }, [active]);
 }

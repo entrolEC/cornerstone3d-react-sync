@@ -1,10 +1,9 @@
 import { Enums, getEnabledElementByViewportId, type Types } from '@cornerstonejs/core';
 import { useSyncExternalStore } from 'react';
 
-// The obvious binding: useSyncExternalStore is React 18's answer for reading
-// external mutable state, so read what the widget needs straight from the
-// engine. Two fields, so getSnapshot returns them as an object.
-export function SliceIndicatorNaive({ viewportId }: { viewportId: string }) {
+// The same binding, with one change: the screen needs the total as well as
+// the index, so getSnapshot hands both back together.
+export function SliceAndTotal({ viewportId }: { viewportId: string }) {
   const state = useSyncExternalStore(
     (onChange) => {
       const element = getEnabledElementByViewportId(viewportId)?.viewport.element;

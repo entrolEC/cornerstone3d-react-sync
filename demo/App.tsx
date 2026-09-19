@@ -2,6 +2,7 @@ import { getRenderingEngine } from '@cornerstonejs/core';
 import { useEffect, useState } from 'react';
 import { setup, renderingEngineId } from './cornerstone';
 import { Breakdown } from './Breakdown';
+import { ByTheBook } from './ByTheBook';
 import { Hero } from './Hero';
 import { MountRace } from './MountRace';
 import { LangProvider, LangSwitch, useCopy, useLang, useTheme } from './ui';
@@ -114,6 +115,7 @@ function Page({ lang, onLang }: { lang: 'ko' | 'en'; onLang: (next: 'ko' | 'en')
         {imageIds && (
           <>
             <Hero imageIds={imageIds} theme={theme} />
+            <ByTheBook imageIds={imageIds} theme={theme} />
             <Breakdown imageIds={imageIds} theme={theme} />
             <MountRace imageIds={imageIds} />
           </>
