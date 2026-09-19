@@ -1,14 +1,17 @@
 import { useState, type ReactNode } from 'react';
-import { getEnabledElementByViewportId, type Types } from '@cornerstonejs/core';
 import { useViewportState } from 'react-cornerstone3d';
 import { Catch, Code, Panel, Steps, useCopy } from './ui';
 import { CtViewport } from './CtViewport';
 import { SliceAndTotal } from './two-values';
 import { SliceAndTotalByHooks } from './two-hooks';
 import { CameraByHooks } from './camera-by-hooks';
+import { WholeState } from './whole-state';
+import { readTwice } from './read-twice';
 import twoValuesSource from './two-values.tsx?raw';
 import twoHooksSource from './two-hooks.tsx?raw';
 import cameraSource from './camera-by-hooks.tsx?raw';
+import wholeStateSource from './whole-state.tsx?raw';
+import readTwiceSource from './read-twice.ts?raw';
 
 const VIEWPORT_ID = 'demo-wall';
 const STEPS = 6;
@@ -33,7 +36,12 @@ export function Breakdown({ imageIds, theme }: { imageIds: string[]; theme: 'lig
 
         <div className="focus">
           {step === 0 && <Code theme={theme} title="demo/two-values.tsx" code={twoValuesSource.trim()} />}
-          {step === 1 && <IdentityProbe viewportId={VIEWPORT_ID} />}
+          {step === 1 && (
+            <div className="focus__stack">
+              <IdentityProbe viewportId={VIEWPORT_ID} />
+              <Code theme={theme} title="demo/read-twice.ts" code={readTwiceSource.trim()} />
+            </div>
+          )}
 
           {step === 2 && (
             <Card title={t.naiveTitle} badge={t.naiveBadge} tone="bad">
@@ -72,6 +80,7 @@ export function Breakdown({ imageIds, theme }: { imageIds: string[]; theme: 'lig
               <Card title={t.hookTitle} badge="react-cornerstone3d" tone="ok">
                 <WholeState viewportId={VIEWPORT_ID} />
               </Card>
+              <Code theme={theme} title="demo/whole-state.tsx" code={wholeStateSource.trim()} />
               <SnapshotProbe viewportId={VIEWPORT_ID} />
             </div>
           )}
@@ -135,19 +144,6 @@ function Crash({ error }: { error: Error }) {
   );
 }
 
-/** One hook call, the whole viewport state — the answer to step 5. */
-function WholeState({ viewportId }: { viewportId: string }) {
-  const state = useViewportState(viewportId);
-  if (!state) return <span className="ind ind--empty">—</span>;
-  return (
-    <span className="ind ind--small">
-      {(state.sliceIndex ?? 0) + 1} / {state.numberOfSlices}
-      <br />
-      zoom {Math.round(state.camera.parallelScale ?? 0)}
-    </span>
-  );
-}
-
 /**
  * Calls getSnapshot twice in a row with nothing in between, and reports
  * whether the two results are the same object. Both rows come back false:
@@ -155,22 +151,14 @@ function WholeState({ viewportId }: { viewportId: string }) {
  */
 function IdentityProbe({ viewportId }: { viewportId: string }) {
   const t = useCopy().panel3.probe;
-  const viewport = getEnabledElementByViewportId(viewportId)?.viewport as
-    | Types.IStackViewport
-    | undefined;
-  if (!viewport) return null;
-
-  const compose = () => ({ slice: viewport.getSliceIndex(), total: viewport.getNumberOfSlices() });
+  const result = readTwice(viewportId);
+  if (!result) return null;
 
   return (
     <div className="probe">
       <p className="probe__title">{t.title}</p>
-      <ProbeRow what={t.composedWhat} code={t.composed} same={Object.is(compose(), compose())} />
-      <ProbeRow
-        what={t.cameraWhat}
-        code={t.camera}
-        same={Object.is(viewport.getCamera(), viewport.getCamera())}
-      />
+      <ProbeRow what={t.composedWhat} code={t.composed} same={result.composed} />
+      <ProbeRow what={t.cameraWhat} code={t.camera} same={result.fromEngine} />
     </div>
   );
 }

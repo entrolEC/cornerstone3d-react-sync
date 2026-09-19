@@ -218,7 +218,7 @@ export const COPY: Record<Lang, Copy> = {
         <>
           그런데 <code>getSnapshot</code>을 연달아 두 번 불러보면, 그 사이{' '}
           <b>화면에서는 아무 일도 없었는데</b> 매번 다른 객체가 나옵니다. 내가 만들어 반환하든,
-          엔진이 준 걸 그대로 반환하든 똑같습니다.
+          엔진이 준 걸 그대로 반환하든 똑같습니다 — 아래가 그 실험을 한 코드 전부입니다.
         </>,
         <>
           패널 2의 <b>3번 규칙</b>을 떠올려 보세요 — 비교가 <code>Object.is</code>입니다. 객체가
@@ -236,9 +236,10 @@ export const COPY: Record<Lang, Copy> = {
           <b>위젯 하나에 훅 10개, 구독도 10개</b>입니다. 이것도 동작은 합니다.
         </>,
         <>
-          <code>useViewportState</code>는 스냅샷을 <b>뷰포트당 하나만</b> 만들어 공유합니다.
-          2번과 똑같은 실험에서 결과가 반대고, 슬라이스든 카메라든{' '}
-          <b>호출 한 번</b>으로 끝납니다.
+          <code>useViewportState</code>는 <b>엔진 이벤트가 올 때만</b> 스냅샷을 다시 만들고, 새로
+          만든 값이 이전과 같으면 <b>이전 참조를 그대로 유지합니다.</b> 그 스냅샷 하나를 뷰포트의
+          모든 소비자가 공유하고요. 그래서 2번과 똑같은 실험이 반대 결과를 내고, 슬라이스든
+          카메라든 <b>호출 한 번</b>으로 끝납니다.
         </>,
       ],
       verdict: (
@@ -470,6 +471,7 @@ export const COPY: Record<Lang, Copy> = {
           But call <code>getSnapshot</code> twice in a row, with{' '}
           <b>nothing happening on screen in between</b>, and a different object comes back each
           time — whether you build the object yourself or hand back what the engine gave you.
+          The code below is the whole experiment.
         </>,
         <>
           Remember <b>line 3</b> from panel 2: the comparison is <code>Object.is</code>. A
@@ -487,8 +489,10 @@ export const COPY: Record<Lang, Copy> = {
           <b>ten hooks and ten subscriptions in one widget</b>. This works too.
         </>,
         <>
-          <code>useViewportState</code> builds <b>one snapshot per viewport</b> and shares it.
-          The same experiment as step 2 gives the opposite answer, and slice or camera alike
+          <code>useViewportState</code> rebuilds its snapshot <b>only when an engine event
+          arrives</b>, and when the new value equals the old one it <b>keeps the old
+          reference</b>. That single snapshot is shared by every consumer of the viewport. So
+          the same experiment as step 2 gives the opposite answer, and slice or camera alike
           come back in <b>a single call</b>.
         </>,
       ],
