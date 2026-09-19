@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>react-cornerstone3d</title>
+    <meta
+      name="description"
+      content="Cornerstone3D의 엔진 상태를 React로 읽는 바인딩 — tearing 없이, useSyncExternalStore로."
+    />
+    <script>
+      // Applied before first paint so the page never flashes the wrong theme.
+      try {
+        document.documentElement.dataset.theme =
+          localStorage.getItem('theme') ??
+          (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      } catch { document.documentElement.dataset.theme = 'light'; }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

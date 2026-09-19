@@ -8,9 +8,13 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
+    "jsx": "react-jsx",
+    "paths": { "react-cornerstone3d": ["./src/index.ts"] },
     "declaration": true,
     "outDir": "dist",
     "noEmit": true
   },
-  "include": ["src"]
+  "include": ["src", "demo"],
+  // vite.config.ts runs under Node, not in this typecheck — no @types/node needed.
+  "exclude": ["demo/vite.config.ts"]
 }

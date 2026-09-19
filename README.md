@@ -1,6 +1,6 @@
 # react-cornerstone3d
 
-[한국어](./README.ko.md)
+[한국어](./README.ko.md) · **[Live demo →](https://entrolec.github.io/react-cornerstone3d/)**
 
 React bindings that expose [Cornerstone3D](https://www.cornerstonejs.org/)'s live engine state to React components — tearing-free, via `useSyncExternalStore`.
 
@@ -17,6 +17,8 @@ function SliceIndicator() {
   return <span>slice {index + 1}</span>;
 }
 ```
+
+[**Run it →**](https://entrolec.github.io/react-cornerstone3d/) — a real CT stack, the hook and the hand-rolled version side by side, and the mount-order bug the hand-rolled one still has.
 
 That one hook call replaces the ~25 lines of `useEffect` + `addEventListener` + `setState` plumbing every Cornerstone3D + React app writes per widget today.
 
