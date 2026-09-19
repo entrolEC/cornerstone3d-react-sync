@@ -191,16 +191,17 @@ hand-rolls this — and inherits the same defects. Graded by how often they actu
 
 **Every single time**
 
-- **`useSyncExternalStore` is off the table.** It is React 18's answer for reading external
-  mutable state, and it cannot be pointed at Cornerstone3D directly: the getters return a fresh
-  object on every call, so a `getSnapshot` that reads the engine never settles. React logs
-  *“The result of getSnapshot should be cached to avoid an infinite loop”* and then throws
-  *“Maximum update depth exceeded”* — taking the page with it.
-  ([the demo mounts it live, behind an error boundary](https://entrolec.github.io/react-cornerstone3d/)) The only way out is to fall back
-  to `useEffect` + `setState`, which is the path where tearing appears. And it cannot be fixed
-  inside a widget: the snapshot has to be **shared** by every consumer of a viewport for the
-  reference to be stable, so it has to live centrally. **This is the problem the library
-  exists for.**
+- **There is no store to point `useSyncExternalStore` at.** React 18's hook for external state
+  needs a snapshot whose reference is stable between changes. Redux and Zustand satisfy that for
+  free — they already hold a state object, so `getSnapshot` is `() => store.getState()`.
+  Cornerstone3D holds nothing: its getters compute a fresh value on every call. Read one
+  primitive per hook and it works; the moment a snapshot returns an object, React logs *“The
+  result of getSnapshot should be cached to avoid an infinite loop”* and throws *“Maximum update
+  depth exceeded”*, taking the page with it. Staying primitive-only costs a hook and a
+  subscription per scalar — ten for a camera, in every widget that wants one — and no widget can
+  fix that for itself, because the snapshot has to be **shared** across a viewport's consumers to
+  be stable. ([the demo walks all of it, live](https://entrolec.github.io/react-cornerstone3d/)) **Supplying that store is what this library
+  is.**
 - **Mount-order race.** A viewport enabled *after* the widget mounts is never subscribed to.
   The effect checked once, found nothing, and has no reason to run again.
   ([reproduced in the demo](https://entrolec.github.io/react-cornerstone3d/))

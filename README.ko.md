@@ -191,15 +191,17 @@ Cornerstone3D는 의도적으로 프레임워크 중립이라 React 바인딩을
 
 **매번**
 
-- **`useSyncExternalStore`를 쓸 수 없습니다.** React 18에서 외부 가변 상태를 읽는 정답인데,
-  Cornerstone3D에는 그대로 겨눌 수 없습니다. 게터가 호출할 때마다 새 객체를 돌려주므로 엔진을
-  직접 읽는 `getSnapshot`은 영원히 안정되지 않습니다. React가
+- **`useSyncExternalStore`를 겨눌 스토어가 없습니다.** React 18의 외부 상태용 훅은 변화가 없는
+  동안 참조가 안정된 스냅샷을 요구합니다. Redux나 Zustand는 이미 상태 객체를 들고 있어 공짜로
+  만족합니다 — `getSnapshot`이 `() => store.getState()` 한 줄이죠. Cornerstone3D는 아무것도 들고
+  있지 않고, 게터가 부를 때마다 새로 계산합니다. 훅 하나에 원시값 하나씩 읽으면 동작하지만,
+  스냅샷이 **객체**를 돌려주는 순간 React가
   *"The result of getSnapshot should be cached to avoid an infinite loop"* 를 찍고
-  *"Maximum update depth exceeded"* 를 던지며 페이지를 통째로 죽입니다.
-  ([데모가 에러 경계 안에서 실제로 마운트합니다](https://entrolec.github.io/react-cornerstone3d/)) 탈출구는 `useEffect` + `setState`로
-  돌아가는 것뿐인데, 그게 tearing이 생기는 경로입니다. 그리고 이건 위젯 안에서 고칠 수
-  없습니다 — 참조가 안정되려면 스냅샷을 한 뷰포트의 모든 소비자가 **공유**해야 하므로 중앙에
-  있어야 합니다. **이 라이브러리가 존재하는 이유가 이것입니다.**
+  *"Maximum update depth exceeded"* 를 던지며 페이지를 통째로 죽입니다. 원시값만 고집하면
+  스칼라 하나당 훅 하나와 구독 하나 — 카메라 하나에 열 개, 그걸 원하는 위젯마다 — 이고, 위젯
+  혼자서는 해결할 수 없습니다. 참조가 안정되려면 스냅샷을 뷰포트의 모든 소비자가 **공유**해야
+  하니까요. ([데모가 전부 라이브로 보여줍니다](https://entrolec.github.io/react-cornerstone3d/)) **그 스토어를 제공하는 것이 이
+  라이브러리입니다.**
 - **마운트 순서 경쟁.** 위젯보다 *나중에* 켜진 뷰포트는 영영 구독되지 않습니다. effect는 한 번
   확인하고 아무것도 못 찾았고, 다시 돌 이유가 없습니다.
   ([데모에서 재현](https://entrolec.github.io/react-cornerstone3d/))

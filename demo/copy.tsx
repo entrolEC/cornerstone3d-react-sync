@@ -181,12 +181,12 @@ export const COPY: Record<Lang, Copy> = {
     },
     panel3: {
       eyebrow: '패널 3',
-      title: '값이 둘이 되는 순간, 막힙니다',
+      title: '객체를 돌려주는 순간, 막힙니다',
       lead: (
         <>
-          슬라이스 번호만 띄우는 화면은 없습니다. 보통 <code>68 / 135</code>처럼 전체 장수도
-          같이 보여주죠. 값이 둘이 되면 <code>getSnapshot</code>은 <b>객체</b>를 돌려줘야
-          합니다. 딱 그 지점에서 막힙니다.
+          패널 2는 값이 하나였습니다. 실제 화면은 <code>68 / 135</code>처럼 값이 여럿이죠.
+          자연스럽게 하나의 객체로 묶게 되는데 — <b>거기서 막힙니다.</b> 빠져나갈 길이 있는지도
+          같이 확인합니다.
         </>
       ),
       naiveTitle: 'useSyncExternalStore',
@@ -212,7 +212,8 @@ export const COPY: Record<Lang, Copy> = {
       captions: [
         <>
           패널 2의 코드에서 <b>바뀐 곳은 한 군데</b>입니다 — <code>getSnapshot</code>이 숫자
-          대신 <code>{'{ slice, total }'}</code> 객체를 돌려줍니다. 누구라도 이렇게 씁니다.
+          대신 <code>{'{ slice, total }'}</code> 객체를 돌려줍니다. 값이 둘 필요하니 자연스러운
+          선택입니다.
         </>,
         <>
           그런데 <code>getSnapshot</code>을 연달아 두 번 불러보면, 그 사이{' '}
@@ -221,22 +222,36 @@ export const COPY: Record<Lang, Copy> = {
         </>,
         <>
           패널 2의 <b>3번 규칙</b>을 떠올려 보세요 — 비교가 <code>Object.is</code>입니다. 객체가
-          매번 다르니 React는 <b>매번 상태가 바뀐 것</b>으로 봅니다. 그래서 다시 렌더하고, 또
-          부르고, 또 다른 객체를 받고… 눌러서 확인해 보세요. 에러 경계가 없으면 페이지 전체가
-          죽습니다.
+          매번 다르니 React는 <b>매번 상태가 바뀐 것</b>으로 봅니다. 눌러서 확인해 보세요. 에러
+          경계가 없으면 페이지 전체가 죽습니다.
         </>,
         <>
-          <code>useViewportState</code>는 엔진 이벤트가 올 때만 스냅샷을 새로 만들고, 그 사이에는{' '}
-          <b>같은 객체를 그대로 돌려줍니다.</b> 2번과 똑같은 실험인데 결과가 반대입니다.
+          <b>"그럼 훅을 두 번 쓰면 되잖아요?"</b> — 맞습니다. <b>실제로 됩니다.</b> 숫자 같은
+          원시값을 돌려주면 <code>Object.is</code>가 안정되니까요. 그러니 진짜 경계선은 값의
+          개수가 아니라 <b>원시값이냐 아니냐</b>입니다.
+        </>,
+        <>
+          그럼 <b>카메라</b>는요? 뷰포트 동기화나 뷰 상태 저장에는 카메라 전체가 필요합니다.
+          원시값으로만 읽으려면 위치 3 + 초점 3 + 뷰업 3 + 줌 1 —{' '}
+          <b>위젯 하나에 훅 10개, 구독도 10개</b>입니다. 이것도 동작은 합니다.
+        </>,
+        <>
+          <code>useViewportState</code>는 스냅샷을 <b>뷰포트당 하나만</b> 만들어 공유합니다.
+          2번과 똑같은 실험에서 결과가 반대고, 슬라이스든 카메라든{' '}
+          <b>호출 한 번</b>으로 끝납니다.
         </>,
       ],
       verdict: (
         <>
-          <b>이 벽은 위젯 안에서 넘을 수 없습니다.</b> 참조가 안정되려면 스냅샷을 한 뷰포트의 모든
-          소비자가 공유해야 하고, 그건 중앙에 있어야만 가능합니다. 남은 선택지는{' '}
-          <code>useSyncExternalStore</code>를 포기하고 패널 1의{' '}
-          <code>useEffect + setState</code>로 돌아가는 것뿐인데 — 그게 바로 tearing이 생기는
-          경로입니다.
+          <b>이건 Cornerstone3D의 버그가 아닙니다.</b> <code>getSnapshot</code>이 안정된 참조를
+          돌려줘야 한다는 건 React의 보편 규칙이고, Redux나 Zustand를 쓸 땐 문제가 되지
+          않습니다 — <b>그 라이브러리들이 이미 안정된 상태 객체를 들고 있기 때문</b>입니다.{' '}
+          <code>getSnapshot</code>은 <code>() =&gt; store.getState()</code> 한 줄이면 끝이죠.
+          <br />
+          <br />
+          Cornerstone3D에 없는 게 바로 그 <b>스토어</b>입니다. 상태를 보관하는 객체가 없고,
+          게터는 부를 때마다 계산합니다. <code>useViewportState</code>가 하는 일은{' '}
+          <b>엔진 이벤트로부터 그 스토어를 만들어, 뷰포트당 하나씩 공유하는 것</b>입니다.
         </>
       ),
     },
@@ -417,12 +432,12 @@ export const COPY: Record<Lang, Copy> = {
     },
     panel3: {
       eyebrow: 'Panel 3',
-      title: 'The moment there are two values',
+      title: 'The moment a snapshot returns an object',
       lead: (
         <>
-          No screen shows just a slice number. It usually shows <code>68 / 135</code> — the
-          total as well. Two values mean <code>getSnapshot</code> has to hand back an{' '}
-          <b>object</b>. That is where it stops.
+          Panel 2 read one value. Real screens read several — <code>68 / 135</code>. Bundling
+          them into one object is the natural move, and <b>that is where it stops.</b> We’ll
+          check whether there is a way around it, too.
         </>
       ),
       naiveTitle: 'useSyncExternalStore',
@@ -448,8 +463,8 @@ export const COPY: Record<Lang, Copy> = {
       captions: [
         <>
           Exactly <b>one thing changed</b> from panel 2’s code — <code>getSnapshot</code>{' '}
-          returns a <code>{'{ slice, total }'}</code> object instead of a number. Anyone would
-          write it this way.
+          returns a <code>{'{ slice, total }'}</code> object instead of a number. Two values,
+          so one object. The natural move.
         </>,
         <>
           But call <code>getSnapshot</code> twice in a row, with{' '}
@@ -458,23 +473,36 @@ export const COPY: Record<Lang, Copy> = {
         </>,
         <>
           Remember <b>line 3</b> from panel 2: the comparison is <code>Object.is</code>. A
-          different object every time reads as <b>the state changed every time</b>. So React
-          renders again, calls again, gets another object again… press it and watch. Without an
-          error boundary this takes the whole page down.
+          different object every time reads as <b>the state changed every time</b>. Press it and
+          watch. Without an error boundary this takes the whole page down.
         </>,
         <>
-          <code>useViewportState</code> rebuilds its snapshot only when an engine event arrives,
-          and in between it <b>hands back the very same object.</b> The same experiment as step
-          2, the opposite result.
+          <b>“So just call the hook twice?”</b> — right, and <b>it works.</b> Hand back a
+          primitive like a number and <code>Object.is</code> settles. So the real line isn’t how
+          many values you need, it is <b>primitive or not</b>.
+        </>,
+        <>
+          Then what about the <b>camera</b>? Syncing two viewports, or saving a view, needs all
+          of it. Primitives only means position 3 + focal point 3 + view up 3 + zoom 1 —{' '}
+          <b>ten hooks and ten subscriptions in one widget</b>. This works too.
+        </>,
+        <>
+          <code>useViewportState</code> builds <b>one snapshot per viewport</b> and shares it.
+          The same experiment as step 2 gives the opposite answer, and slice or camera alike
+          come back in <b>a single call</b>.
         </>,
       ],
       verdict: (
         <>
-          <b>This wall cannot be climbed from inside a widget.</b> For the reference to be
-          stable, every consumer of a viewport has to share one snapshot, and that can only live
-          centrally. The only option left is to give up <code>useSyncExternalStore</code> and go
-          back to panel 1’s <code>useEffect + setState</code> — which is precisely the path
-          where tearing appears.
+          <b>This is not a Cornerstone3D bug.</b> That <code>getSnapshot</code> must return a
+          stable reference is a universal React rule, and it never bites with Redux or Zustand —{' '}
+          <b>because those libraries already hold a stable state object</b>. There,{' '}
+          <code>getSnapshot</code> is one line: <code>() =&gt; store.getState()</code>.
+          <br />
+          <br />
+          Cornerstone3D has no such <b>store</b>. Nothing holds the state, and the getters
+          compute it fresh on every call. What <code>useViewportState</code> does is{' '}
+          <b>build that store out of engine events, and share one per viewport</b>.
         </>
       ),
     },

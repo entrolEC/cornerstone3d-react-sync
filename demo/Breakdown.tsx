@@ -1,15 +1,17 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { getEnabledElementByViewportId, type Types } from '@cornerstonejs/core';
+import { useViewportState } from 'react-cornerstone3d';
 import { Catch, Code, Panel, Steps, useCopy } from './ui';
 import { CtViewport } from './CtViewport';
-import { SliceIndicator } from './widgets';
 import { SliceAndTotal } from './two-values';
-import { useViewportState } from 'react-cornerstone3d';
-import source from './two-values.tsx?raw';
+import { SliceAndTotalByHooks } from './two-hooks';
+import { CameraByHooks } from './camera-by-hooks';
+import twoValuesSource from './two-values.tsx?raw';
+import twoHooksSource from './two-hooks.tsx?raw';
+import cameraSource from './camera-by-hooks.tsx?raw';
 
 const VIEWPORT_ID = 'demo-wall';
-const SOURCE = source.trim();
-const STEPS = 4;
+const STEPS = 6;
 
 // A production React build ships error #185 as a bare code, so the page says
 // what failed in words and links React's own page for it.
@@ -22,79 +24,54 @@ export function Breakdown({ imageIds, theme }: { imageIds: string[]; theme: 'lig
   // A key, not a flag: remounting is what re-runs the experiment.
   const [attempt, setAttempt] = useState(0);
 
-  const restart = () => {
-    setStep(0);
-    setAttempt(0);
-  };
-
   return (
     <Panel eyebrow={t.eyebrow} title={t.title} lead={t.lead}>
       <div className="stage">
         <div className="stage__image">
           <CtViewport viewportId={VIEWPORT_ID} imageIds={imageIds} showOverlay={false} />
         </div>
+
         <div className="focus">
-          {step === 0 && <Code theme={theme} title="demo/two-values.tsx" code={SOURCE} />}
+          {step === 0 && <Code theme={theme} title="demo/two-values.tsx" code={twoValuesSource.trim()} />}
           {step === 1 && <IdentityProbe viewportId={VIEWPORT_ID} />}
+
           {step === 2 && (
-            <div className="card">
-              <div className="card__head">
-                {t.naiveTitle} <span className="badge badge--bad">{t.naiveBadge}</span>
-              </div>
-              <div className="card__body card__body--center">
-                {attempt === 0 ? (
-                  <button
-                    className="button button--primary button--sm"
-                    onClick={() => setAttempt(1)}
-                  >
-                    {t.run}
-                  </button>
-                ) : (
-                  <Catch
-                    key={attempt}
-                    fallback={(error) => {
-                      const code = minifiedCode(error.message);
-                      return (
-                        <div className="crash">
-                          <div className="crash__label">{t.crashed}</div>
-                          <p className="crash__loop">{t.loop}</p>
-                          <p className="crash__message">{error.message}</p>
-                          {code && (
-                            <a
-                              className="crash__link"
-                              href={`https://react.dev/errors/${code}`}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              {t.decode} → react.dev/errors/{code}
-                            </a>
-                          )}
-                          <button
-                            className="button button--secondary button--sm"
-                            onClick={() => setAttempt((n) => n + 1)}
-                          >
-                            {t.again}
-                          </button>
-                        </div>
-                      );
-                    }}
-                  >
-                    <SliceAndTotal viewportId={VIEWPORT_ID} />
-                  </Catch>
-                )}
-              </div>
-            </div>
+            <Card title={t.naiveTitle} badge={t.naiveBadge} tone="bad">
+              {attempt === 0 ? (
+                <button className="button button--primary button--sm" onClick={() => setAttempt(1)}>
+                  {t.run}
+                </button>
+              ) : (
+                <Catch key={attempt} fallback={(error) => <Crash error={error} />}>
+                  <SliceAndTotal viewportId={VIEWPORT_ID} />
+                </Catch>
+              )}
+            </Card>
           )}
+
           {step === 3 && (
             <div className="focus__stack">
-              <div className="card">
-                <div className="card__head">
-                  {t.hookTitle} <span className="badge badge--ok">react-cornerstone3d</span>
-                </div>
-                <div className="card__body card__body--center">
-                  <SliceIndicator viewportId={VIEWPORT_ID} />
-                </div>
-              </div>
+              <Card title="useSyncExternalStore × 2" badge={t.naiveBadge} tone="ok">
+                <SliceAndTotalByHooks viewportId={VIEWPORT_ID} />
+              </Card>
+              <Code theme={theme} title="demo/two-hooks.tsx" code={twoHooksSource.trim()} />
+            </div>
+          )}
+
+          {step === 4 && (
+            <div className="focus__stack">
+              <Card title="useSyncExternalStore × 10" badge={t.naiveBadge} tone="ok">
+                <CameraByHooks viewportId={VIEWPORT_ID} />
+              </Card>
+              <Code theme={theme} title="demo/camera-by-hooks.tsx" code={cameraSource.trim()} />
+            </div>
+          )}
+
+          {step === 5 && (
+            <div className="focus__stack">
+              <Card title={t.hookTitle} badge="react-cornerstone3d" tone="ok">
+                <WholeState viewportId={VIEWPORT_ID} />
+              </Card>
               <SnapshotProbe viewportId={VIEWPORT_ID} />
             </div>
           )}
@@ -109,11 +86,65 @@ export function Breakdown({ imageIds, theme }: { imageIds: string[]; theme: 'lig
         next={common.next}
         restart={common.restart}
         onNext={() => setStep((n) => n + 1)}
-        onRestart={restart}
+        onRestart={() => {
+          setStep(0);
+          setAttempt(0);
+        }}
       />
 
       {step === STEPS - 1 && <div className="verdict verdict--ok">{t.verdict}</div>}
     </Panel>
+  );
+}
+
+function Card({
+  title,
+  badge,
+  tone,
+  children,
+}: {
+  title: string;
+  badge: string;
+  tone: 'ok' | 'bad';
+  children: ReactNode;
+}) {
+  return (
+    <div className="card">
+      <div className="card__head">
+        {title} <span className={`badge badge--${tone}`}>{badge}</span>
+      </div>
+      <div className="card__body card__body--center">{children}</div>
+    </div>
+  );
+}
+
+function Crash({ error }: { error: Error }) {
+  const t = useCopy().panel3;
+  const code = minifiedCode(error.message);
+  return (
+    <div className="crash">
+      <div className="crash__label">{t.crashed}</div>
+      <p className="crash__loop">{t.loop}</p>
+      <p className="crash__message">{error.message}</p>
+      {code && (
+        <a className="crash__link" href={`https://react.dev/errors/${code}`} target="_blank" rel="noreferrer">
+          {t.decode} → react.dev/errors/{code}
+        </a>
+      )}
+    </div>
+  );
+}
+
+/** One hook call, the whole viewport state — the answer to step 5. */
+function WholeState({ viewportId }: { viewportId: string }) {
+  const state = useViewportState(viewportId);
+  if (!state) return <span className="ind ind--empty">—</span>;
+  return (
+    <span className="ind ind--small">
+      {(state.sliceIndex ?? 0) + 1} / {state.numberOfSlices}
+      <br />
+      zoom {Math.round(state.camera.parallelScale ?? 0)}
+    </span>
   );
 }
 
@@ -134,11 +165,7 @@ function IdentityProbe({ viewportId }: { viewportId: string }) {
   return (
     <div className="probe">
       <p className="probe__title">{t.title}</p>
-      <ProbeRow
-        what={t.composedWhat}
-        code={t.composed}
-        same={Object.is(compose(), compose())}
-      />
+      <ProbeRow what={t.composedWhat} code={t.composed} same={Object.is(compose(), compose())} />
       <ProbeRow
         what={t.cameraWhat}
         code={t.camera}
