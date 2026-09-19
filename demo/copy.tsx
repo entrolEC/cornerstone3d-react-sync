@@ -38,6 +38,23 @@ export interface Copy {
     eyebrow: string;
     title: string;
     lead: ReactNode;
+    tabNaive: string;
+    tabHook: string;
+    naiveTitle: string;
+    hookTitle: string;
+    naiveBadge: string;
+    idle: string;
+    run: string;
+    again: string;
+    crashed: string;
+    loop: string;
+    decode: string;
+    verdict: ReactNode;
+  };
+  panel3: {
+    eyebrow: string;
+    title: string;
+    lead: ReactNode;
     imageLabel: string;
     imageOff: string;
     notMounted: string;
@@ -90,13 +107,54 @@ export const COPY: Record<Lang, Copy> = {
           <strong>오른쪽 코드는 지어낸 게 아닙니다.</strong>
           이 페이지가 실제로 import해서 렌더링하는 파일(<code>demo/widgets.tsx</code>)에서 그대로
           뽑아옵니다. 그리고 직접 배선한 쪽은 Cornerstone3D + React 프로젝트가 위젯마다 반복해서
-          쓰는 바로 그 패턴입니다 — 줄 수보다 나쁜 건, 저 {DEMO_NOTE_LINES}줄을 다 쓰고도 버그가
-          남아있다는 점입니다. 다음 패널에서 보여드립니다. ↓
+          쓰는 바로 그 패턴입니다. 그런데 줄 수는 문제의 절반일 뿐입니다 — 나머지 절반은,
+          저 {DEMO_NOTE_LINES}줄을 버리고 <b>정석대로 다시 짜도 막힌다</b>는 것입니다. 다음
+          패널에서 직접 눌러보세요. ↓
         </>
       ),
     },
     panel2: {
       eyebrow: '패널 2',
+      title: '정석대로 해도, 여기서 막힙니다',
+      lead: (
+        <>
+          React 18에서 외부 상태를 읽는 정답은 <code>useSyncExternalStore</code>입니다.
+          Cornerstone3D에 그대로 적용하면 어떻게 되는지 직접 눌러보세요 —{' '}
+          <b>이 페이지에서 진짜로 실행됩니다.</b>
+        </>
+      ),
+      tabNaive: '순진한 구현',
+      tabHook: 'useViewportState',
+      naiveTitle: 'useSyncExternalStore',
+      hookTitle: 'useViewportState',
+      naiveBadge: '직접',
+      idle: '아직 마운트하지 않았습니다',
+      run: '마운트하기',
+      again: '다시',
+      crashed: 'React가 던진 에러',
+      loop: '무한 렌더 루프 — React가 렌더링을 중단했습니다',
+      decode: '에러 코드 해설',
+      verdict: (
+        <>
+          <b>Cornerstone3D 게터는 호출할 때마다 새 객체를 돌려줍니다.</b>{' '}
+          <code>useSyncExternalStore</code>는 <code>getSnapshot</code>의 결과를{' '}
+          <code>Object.is</code>로 비교하므로, 매번 다른 참조를 받으면 영원히 안정되지 않습니다.
+          <br />
+          <br />
+          필드 하나를 숫자로 꺼내 읽으면 우연히 동작합니다 — 패널 1의 훅 예제가{' '}
+          <code>useViewportState</code>를 두 번 호출하는 이유가 그겁니다. 하지만 두 값을 객체로
+          묶는 순간 막힙니다. 탈출구는 <code>useSyncExternalStore</code>를 포기하고{' '}
+          <code>useEffect + setState</code>로 돌아가는 것뿐인데, <b>그게 바로 tearing이 생기는
+          경로입니다.</b>
+          <br />
+          <br />
+          그리고 이 벽은 위젯 안에서 넘을 수 없습니다. 스냅샷은 한 뷰포트의 모든 소비자가{' '}
+          <b>공유</b>해야 참조가 안정되기 때문입니다 — 중앙에 있어야만 하는 이유입니다.
+        </>
+      ),
+    },
+    panel3: {
+      eyebrow: '패널 3',
       title: '줄 수가 아니라, 남아있는 버그가 문제입니다',
       lead: (
         <>
@@ -213,14 +271,55 @@ export const COPY: Record<Lang, Copy> = {
           <strong>The code on the right isn’t an illustration.</strong>
           It is pulled from the file this page actually imports and renders
           (<code>demo/widgets.tsx</code>). And the hand-rolled side is the very pattern every
-          Cornerstone3D + React project repeats per widget — worse than the line count is that
-          after all {DEMO_NOTE_LINES} lines, the bugs are still there. The next panel shows
-          them. ↓
+          Cornerstone3D + React project repeats per widget. But the line count is only half the
+          problem — the other half is that throwing those {DEMO_NOTE_LINES} lines away and{' '}
+          <b>doing it the proper way hits a wall</b>. Press the button in the next panel. ↓
         </>
       ),
     },
     panel2: {
       eyebrow: 'Panel 2',
+      title: 'Do it properly, and this is where you stop',
+      lead: (
+        <>
+          <code>useSyncExternalStore</code> is React 18’s answer for reading external mutable
+          state. Press the button to see what happens when you point it at Cornerstone3D —{' '}
+          <b>it really runs, on this page.</b>
+        </>
+      ),
+      tabNaive: 'The obvious binding',
+      tabHook: 'useViewportState',
+      naiveTitle: 'useSyncExternalStore',
+      hookTitle: 'useViewportState',
+      naiveBadge: 'by hand',
+      idle: 'Not mounted yet',
+      run: 'Mount it',
+      again: 'Again',
+      crashed: 'The error React threw',
+      loop: 'Infinite render loop — React aborted rendering',
+      decode: 'What that code means',
+      verdict: (
+        <>
+          <b>Cornerstone3D getters return a fresh object on every call.</b>{' '}
+          <code>useSyncExternalStore</code> compares what <code>getSnapshot</code> returns with{' '}
+          <code>Object.is</code>, so a new reference every time never settles.
+          <br />
+          <br />
+          Read one field as a number and it happens to work — that is why the hook example in
+          panel 1 calls <code>useViewportState</code> twice. Bundle two values into an object and
+          you hit the wall. The only way out is to abandon{' '}
+          <code>useSyncExternalStore</code> for <code>useEffect + setState</code>, and{' '}
+          <b>that is precisely the path where tearing appears.</b>
+          <br />
+          <br />
+          This wall cannot be climbed from inside a widget: the snapshot has to be{' '}
+          <b>shared</b> by every consumer of a viewport for the reference to be stable. That is
+          why it has to live centrally.
+        </>
+      ),
+    },
+    panel3: {
+      eyebrow: 'Panel 3',
       title: 'It’s not the line count — it’s the bugs that survive it',
       lead: (
         <>

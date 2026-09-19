@@ -37,7 +37,7 @@ const STAGES: Stage[][] = [
 const IMAGE_FIRST = [false, true];
 
 export function MountRace({ imageIds }: { imageIds: string[] }) {
-  const t = useCopy().panel2;
+  const t = useCopy().panel3;
   const [storyIndex, setStoryIndex] = useState(0);
   // -1 = before the story starts: no readouts yet, image only where the story needs it.
   const [stepIndex, setStepIndex] = useState(-1);
@@ -62,7 +62,7 @@ export function MountRace({ imageIds }: { imageIds: string[] }) {
   useAutoScroll(stage?.scroll === true && image);
 
   return (
-    <Panel eyebrow={t.eyebrow} title={t.title} lead={t.lead} alt>
+    <Panel eyebrow={t.eyebrow} title={t.title} lead={t.lead}>
       <div className="tabs tabs--spaced" role="tablist">
         {t.stories.map((candidate, index) => (
           <button

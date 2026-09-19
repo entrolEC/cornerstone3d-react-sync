@@ -1,5 +1,14 @@
 import { Highlight, themes } from 'prism-react-renderer';
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import {
+  Component,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+  type ErrorInfo,
+  type ReactNode,
+} from 'react';
 import { COPY, type Copy, type Lang } from './copy';
 
 /* ---------------- language ---------------- */
@@ -165,4 +174,29 @@ export function Panel({
       </div>
     </section>
   );
+}
+
+/* ---------------- error boundary ---------------- */
+
+/**
+ * Without one of these, the naive binding in panel 2 takes the whole page
+ * down with it — which is exactly what it does in a real app.
+ */
+export class Catch extends Component<
+  { children: ReactNode; fallback: (error: Error) => ReactNode },
+  { error?: Error }
+> {
+  state: { error?: Error } = {};
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(_error: Error, _info: ErrorInfo) {
+    // React already logged it; the fallback shows the message on the page.
+  }
+
+  render() {
+    return this.state.error ? this.props.fallback(this.state.error) : this.props.children;
+  }
 }

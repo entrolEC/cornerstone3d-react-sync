@@ -191,6 +191,15 @@ Cornerstone3D는 의도적으로 프레임워크 중립이라 React 바인딩을
 
 **매번**
 
+- **`useSyncExternalStore`를 쓸 수 없습니다.** React 18에서 외부 가변 상태를 읽는 정답인데,
+  Cornerstone3D에는 그대로 겨눌 수 없습니다. 게터가 호출할 때마다 새 객체를 돌려주므로 엔진을
+  직접 읽는 `getSnapshot`은 영원히 안정되지 않습니다. React가
+  *"The result of getSnapshot should be cached to avoid an infinite loop"* 를 찍고
+  *"Maximum update depth exceeded"* 를 던지며 페이지를 통째로 죽입니다.
+  ([데모가 에러 경계 안에서 실제로 마운트합니다](https://entrolec.github.io/react-cornerstone3d/)) 탈출구는 `useEffect` + `setState`로
+  돌아가는 것뿐인데, 그게 tearing이 생기는 경로입니다. 그리고 이건 위젯 안에서 고칠 수
+  없습니다 — 참조가 안정되려면 스냅샷을 한 뷰포트의 모든 소비자가 **공유**해야 하므로 중앙에
+  있어야 합니다. **이 라이브러리가 존재하는 이유가 이것입니다.**
 - **마운트 순서 경쟁.** 위젯보다 *나중에* 켜진 뷰포트는 영영 구독되지 않습니다. effect는 한 번
   확인하고 아무것도 못 찾았고, 다시 돌 이유가 없습니다.
   ([데모에서 재현](https://entrolec.github.io/react-cornerstone3d/))
@@ -207,9 +216,6 @@ Cornerstone3D는 의도적으로 프레임워크 중립이라 React 바인딩을
 
 - concurrent 렌더링에서의 **tearing**: 한 화면의 두 컴포넌트가 서로 다른 슬라이스 번호를
   보여줍니다.
-- **무한 루프, 또는 그걸 피하려는 deep-compare 꼼수.** Cornerstone3D 게터는 호출할 때마다 새
-  객체를 돌려주므로 순진한 `getSnapshot`은 절대 안정화되지 않습니다. 직접 짠 바인딩은 결국
-  이벤트마다 깊은 비교나 `JSON.stringify` 비교를 하게 됩니다.
 
 이 라이브러리는 그 층을 중앙에서 한 번만 해결합니다. 덕분에 UI 컴포넌트는 엔진 상태의 순수
 함수로 남습니다.

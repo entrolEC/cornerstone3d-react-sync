@@ -713,3 +713,37 @@ code {
 .footer__links a {
   font-weight: 500;
 }
+
+/* ---------- panel 2: the wall ---------- */
+.crash {
+  display: grid;
+  gap: 0.7rem;
+  justify-items: center;
+  text-align: center;
+  padding: 0.5rem;
+}
+.crash__label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--bad);
+}
+.crash__loop {
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: var(--text);
+}
+.crash__link {
+  font-size: 0.78rem;
+}
+.crash__message {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+  max-width: 34rem;
+}
+.tabs--top {
+  margin-top: 2rem;
+}

@@ -191,6 +191,16 @@ hand-rolls this — and inherits the same defects. Graded by how often they actu
 
 **Every single time**
 
+- **`useSyncExternalStore` is off the table.** It is React 18's answer for reading external
+  mutable state, and it cannot be pointed at Cornerstone3D directly: the getters return a fresh
+  object on every call, so a `getSnapshot` that reads the engine never settles. React logs
+  *“The result of getSnapshot should be cached to avoid an infinite loop”* and then throws
+  *“Maximum update depth exceeded”* — taking the page with it.
+  ([the demo mounts it live, behind an error boundary](https://entrolec.github.io/react-cornerstone3d/)) The only way out is to fall back
+  to `useEffect` + `setState`, which is the path where tearing appears. And it cannot be fixed
+  inside a widget: the snapshot has to be **shared** by every consumer of a viewport for the
+  reference to be stable, so it has to live centrally. **This is the problem the library
+  exists for.**
 - **Mount-order race.** A viewport enabled *after* the widget mounts is never subscribed to.
   The effect checked once, found nothing, and has no reason to run again.
   ([reproduced in the demo](https://entrolec.github.io/react-cornerstone3d/))
@@ -207,9 +217,6 @@ hand-rolls this — and inherits the same defects. Graded by how often they actu
 
 - **Tearing** under concurrent rendering: two components on one screen showing two different
   slice numbers.
-- **Infinite loops, or deep-compare hacks to escape them.** Cornerstone3D getters return a
-  fresh object on every call, so a naive `getSnapshot` never stabilizes. Hand-rolled bindings
-  end up deep-comparing or `JSON.stringify`-diffing on every event.
 
 This library fixes that layer once, centrally, so UI components stay pure functions of engine
 state.
